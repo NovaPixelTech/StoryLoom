@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { AlertCircle, Aperture, AudioLines, Check, CircleHelp, Clapperboard, Clock3, Download, FileAudio2, FileImage, FileVideo2, FolderOpen, HardDrive, ImagePlus, LoaderCircle, Music2, Pause, Play, Plus, RotateCcw, Save, Settings2, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { formatBytes, formatDuration, inspectFiles, sortByCapture, type MediaItem } from './lib/media';
-import { makePlan, moodNotes, moods, recordFilm, supportedRecording, type RenderStatus } from './lib/render';
+import { makePlan, moodEffects, moodNotes, moods, recordFilm, supportedRecording, type RenderStatus } from './lib/render';
 import { useTemplates, type Settings, type Template } from './lib/templates';
 
 const defaults: Settings = { duration: 60, customDuration: 75, quality: '1080p', mood: 'Cinematic', fit: 'fill' };
@@ -40,6 +40,7 @@ function App() {
   const audio = media.filter((item) => item.kind === 'audio');
   const readableVisuals = media.filter((item) => item.readable && item.kind !== 'audio');
   const recorderCapability = supportedRecording(settings);
+  const activeLook = moodEffects[settings.mood];
   const folderSupported = typeof HTMLInputElement !== 'undefined' && 'webkitdirectory' in HTMLInputElement.prototype;
   const audioMixSupported = typeof window.AudioContext !== 'undefined';
   const filmDuration = settings.duration === 0 ? settings.customDuration : settings.duration;
@@ -290,10 +291,10 @@ function App() {
           <div className="story-layout">
             <div className="preview-monitor">
               <div className="monitor-top"><span><span className="live-dot" />STORY PREVIEW</span><span>16:9 · {settings.quality}</span></div>
-              <div className="monitor-image" style={{ '--mood-filter': moodNotes[settings.mood].filter } as CSSProperties}>
-                {selectedScene?.item.kind === 'image' && <img src={selectedScene.item.url} alt={`Preview scene: ${selectedScene.item.file.name}`} />}
-                {selectedScene?.item.kind === 'video' && <video key={selectedScene.item.id} src={selectedScene.item.url} muted playsInline autoPlay loop />}
-                {selectedScene && <div className="preview-vignette" />}
+              <div className="monitor-image" data-motion={activeLook.motion} data-transition={activeLook.transition} style={{ '--mood-filter': moodNotes[settings.mood].filter, '--look-tint': `rgb(${activeLook.tint})`, '--look-vignette': activeLook.vignette, '--look-glow': activeLook.glow, '--look-leak': activeLook.lightLeak, '--look-grain': activeLook.grain, '--look-bars': `${activeLook.letterbox * 100}%`, '--look-transition-duration': `${activeLook.transitionSeconds}s`, '--look-zoom': String(1 + activeLook.zoom), '--look-motion-name': `preview-${activeLook.motion}` } as CSSProperties}>
+                {selectedScene?.item.kind === 'image' && <img key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} alt={`Preview scene: ${selectedScene.item.file.name}`} />}
+                {selectedScene?.item.kind === 'video' && <video key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} muted playsInline autoPlay loop />}
+                {selectedScene && <><div className="preview-vignette" /><div className="preview-bloom" /><div className="preview-light-leak" /><div className="preview-grain" /><div className="preview-matte" /><div key={`${selectedScene.item.id}-${previewIndex}-${activeLook.transition}`} className="preview-transition" /></>}
                 {!selectedScene && <div className="preview-empty"><Aperture size={28} /><span>Your film begins here</span><small>Add a readable photo or clip to preview the story.</small></div>}
                 <div className="monitor-caption"><span>{settings.mood.toUpperCase()} CUT</span><span>{String(previewIndex + 1).padStart(2, '0')} / {String(plan.length).padStart(2, '0')}</span></div>
               </div>
@@ -306,11 +307,11 @@ function App() {
                   <div className="timeline-thumb">{scene.item.kind === 'image' ? <img src={scene.item.url} alt="" /> : <video src={scene.item.url} muted playsInline preload="metadata" />}</div><span className="timeline-number">{String(index + 1).padStart(2, '0')}</span><span className="timeline-info"><strong>{scene.item.file.name}</strong><small>{scene.item.kind} · {fmtTime(scene.duration)}</small></span><span className="timeline-line" />
                 </button>)}
               </div> : <div className="plan-empty"><Clapperboard size={22} /><span>Nothing to arrange just yet.</span><small>Readable photos and video clips will form a deterministic scene plan. Audio is optional.</small></div>}
-              <div className="plan-recipe"><div className="recipe-item"><span className="recipe-dot" /><span><small>MOOD</small><strong>{settings.mood}</strong></span></div><div className="recipe-item"><span className="recipe-dot gold" /><span><small>LOOK</small><strong>{moodNotes[settings.mood].grade}</strong></span></div><div className="recipe-item"><span className="recipe-dot sage" /><span><small>MOTION</small><strong>{moodNotes[settings.mood].motion}</strong></span></div><div className="recipe-item"><span className="recipe-dot lavender" /><span><small>TRANSITION</small><strong>{moodNotes[settings.mood].transition}</strong></span></div></div>
+              <div className="plan-recipe"><div className="recipe-item"><span className="recipe-dot" /><span><small>MOOD</small><strong>{settings.mood}</strong></span></div><div className="recipe-item"><span className="recipe-dot gold" /><span><small>LOOK</small><strong>{moodNotes[settings.mood].grade}</strong></span></div><div className="recipe-item"><span className="recipe-dot sage" /><span><small>MOTION</small><strong>{moodNotes[settings.mood].motion}</strong></span></div><div className="recipe-item"><span className="recipe-dot lavender" /><span><small>TRANSITION</small><strong>{moodNotes[settings.mood].transition}</strong></span></div><div className="effect-stack"><small>APPLIED EFFECTS</small><div>{moodNotes[settings.mood].effects.map((effect) => <span key={effect}>{effect}</span>)}</div></div></div>
             </div>
           </div>
           <div className="limitations">
-            <div className="limit-icon"><AlertCircle size={16} /></div><div><strong>Keep an eye on the available moments</strong><p>{!readableVisuals.length ? 'No readable photos or video yet. The renderer needs at least one visual scene.' : plan.length < 4 ? `Only ${plan.length} scene${plan.length === 1 ? '' : 's'} available. The film can run longer than your footage; each moment will be held for the scene duration.` : `The ${settings.mood.toLowerCase()} treatment affects motion, transitions and color in the render. This browser records in real time, so a ${fmtTime(filmDuration)} film takes at least that long to make.`} Photos are animated with a gentle zoom. Readable soundtracks are sequenced, crossfaded and faded out; original clip audio is mixed more quietly under music when browser audio mixing is available.</p></div>
+            <div className="limit-icon"><AlertCircle size={16} /></div><div><strong>Keep an eye on the available moments</strong><p>{!readableVisuals.length ? 'No readable photos or video yet. The renderer needs at least one visual scene.' : plan.length < 4 ? `Only ${plan.length} scene${plan.length === 1 ? '' : 's'} available. The film can run longer than your footage; each moment will be held for the scene duration.` : `The ${settings.mood.toLowerCase()} look layers color grading, camera motion, texture and its own scene transition. This browser records in real time, so a ${fmtTime(filmDuration)} film takes at least that long to make.`} Readable soundtracks are sequenced, crossfaded and faded out; original clip audio is mixed more quietly under music when browser audio mixing is available.</p></div>
           </div>
           {audio.length > 0 && <div className="audio-note"><Music2 size={15} /><span><strong>{audio.filter((item) => item.readable).length} readable soundtrack{audio.filter((item) => item.readable).length === 1 ? '' : 's'} found.</strong> {audioMixSupported ? 'Readable tracks are ordered by file date and name, then crossfaded locally. Original clip audio is included at a lower level where available.' : 'This browser does not expose local audio mixing; video export will be silent.'}</span></div>}
           {audio.length === 0 && videos.some((item) => item.readable) && <div className="audio-note"><FileVideo2 size={15} /><span>{audioMixSupported ? 'Original audio from readable video clips is included when present; you can add music if you want a soundtrack.' : 'This browser does not expose local audio mixing; video export will be silent.'}</span></div>}

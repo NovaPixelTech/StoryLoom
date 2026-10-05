@@ -18,16 +18,47 @@ export type RenderStatus = {
 };
 
 export const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy'];
-export const moodNotes: Record<Mood, { grade: string; motion: string; transition: string; filter: string }> = {
-  Cinematic: { grade: 'Warm shadows · restrained contrast', motion: 'Slow push-in', transition: 'Soft crossfade', filter: 'sepia(.11) saturate(.86) contrast(1.08)' },
-  Romantic: { grade: 'Rose warmth · lifted highlights', motion: 'Gentle drift', transition: 'Long dissolve', filter: 'sepia(.13) saturate(1.12) hue-rotate(335deg)' },
-  'Happy & Energetic': { grade: 'Bright color · lively contrast', motion: 'Quick, measured push', transition: 'Clean cut', filter: 'saturate(1.25) contrast(1.06)' },
-  'Travel Adventure': { grade: 'Sunlit amber · vivid skies', motion: 'Wide exploratory pan', transition: 'Directional wipe', filter: 'saturate(1.12) sepia(.08)' },
-  Nostalgic: { grade: 'Faded film · amber grain', motion: 'Still frame with breathing zoom', transition: 'Film dissolve', filter: 'sepia(.28) saturate(.7) contrast(.94)' },
-  'Family & Memories': { grade: 'Soft skin tones · natural warmth', motion: 'Tender slow zoom', transition: 'Gentle dissolve', filter: 'sepia(.07) saturate(.92)' },
-  Epic: { grade: 'Deep blacks · bold highlights', motion: 'Broad cinematic sweep', transition: 'Impact cut', filter: 'contrast(1.24) saturate(.9)' },
-  'Minimal & Elegant': { grade: 'Quiet color · clean detail', motion: 'Almost-still, precise', transition: 'Measured fade', filter: 'saturate(.72) contrast(1.04)' },
-  Dreamy: { grade: 'Hazy light · softened color', motion: 'Floating drift', transition: 'Luminous dissolve', filter: 'saturate(.86) brightness(1.06) blur(.15px)' },
+export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom';
+type MotionStyle = 'push' | 'pan' | 'float' | 'sweep';
+export type MoodEffectProfile = {
+  tint: string;
+  tintAmount: number;
+  vignette: number;
+  grain: number;
+  glow: number;
+  lightLeak: number;
+  dust: number;
+  letterbox: number;
+  transition: TransitionStyle;
+  transitionSeconds: number;
+  zoom: number;
+  driftX: number;
+  driftY: number;
+  motion: MotionStyle;
+};
+
+export const moodNotes: Record<Mood, { grade: string; motion: string; transition: string; filter: string; effects: string[] }> = {
+  Cinematic: { grade: 'Warm shadows · restrained contrast', motion: 'Slow push-in', transition: 'Soft crossfade', filter: 'sepia(.11) saturate(.86) contrast(1.08)', effects: ['Split-tone grade', 'Fine film grain', 'Anamorphic matte', 'Soft vignette'] },
+  Romantic: { grade: 'Rose warmth · lifted highlights', motion: 'Gentle drift', transition: 'Rose light-leak dissolve', filter: 'sepia(.13) saturate(1.12) hue-rotate(335deg)', effects: ['Rose highlight bloom', 'Floating camera drift', 'Moving light leak', 'Soft vignette'] },
+  'Happy & Energetic': { grade: 'Bright color · lively contrast', motion: 'Quick, measured push', transition: 'Rhythmic flash cut', filter: 'saturate(1.25) contrast(1.06)', effects: ['Vivid color grade', 'Rhythmic push-in', 'Soft highlight flash', 'Bright edge glow'] },
+  'Travel Adventure': { grade: 'Sunlit amber · vivid skies', motion: 'Wide exploratory pan', transition: 'Directional wipe', filter: 'saturate(1.12) sepia(.08)', effects: ['Sun-kissed split tone', 'Wide exploratory pan', 'Moving lens flare', 'Dust motes', 'Directional wipe'] },
+  Nostalgic: { grade: 'Faded film · amber grain', motion: 'Still frame with breathing zoom', transition: 'Super-8 film burn', filter: 'sepia(.28) saturate(.7) contrast(.94)', effects: ['Faded print grade', 'Super-8 grain', 'Gate weave', 'Amber film burn', 'Soft vignette'] },
+  'Family & Memories': { grade: 'Soft skin tones · natural warmth', motion: 'Tender slow zoom', transition: 'Gentle cross-dissolve', filter: 'sepia(.07) saturate(.92)', effects: ['Natural warm grade', 'Skin-friendly highlights', 'Slow Ken Burns move', 'Gentle cross-dissolve'] },
+  Epic: { grade: 'Deep blacks · bold highlights', motion: 'Broad cinematic sweep', transition: 'Zoom-impact transition', filter: 'contrast(1.24) saturate(.9)', effects: ['Deep contrast grade', 'Monumental sweep', 'Anamorphic matte', 'Zoom-impact transition', 'Edge vignette'] },
+  'Minimal & Elegant': { grade: 'Quiet color · clean detail', motion: 'Almost-still, precise', transition: 'Measured fade', filter: 'saturate(.72) contrast(1.04)', effects: ['Muted color palette', 'Precision push-in', 'Quiet vignette', 'Measured soft fade'] },
+  Dreamy: { grade: 'Hazy light · softened color', motion: 'Floating drift', transition: 'Luminous bloom dissolve', filter: 'saturate(.86) brightness(1.06) blur(.15px)', effects: ['Pastel diffusion', 'Luminous highlight bloom', 'Floating camera drift', 'Flowing light leak'] },
+};
+
+export const moodEffects: Record<Mood, MoodEffectProfile> = {
+  Cinematic: { tint: '224,163,105', tintAmount: .055, vignette: .38, grain: .035, glow: .075, lightLeak: .025, dust: 0, letterbox: .035, transition: 'crossfade', transitionSeconds: .58, zoom: .034, driftX: .005, driftY: .002, motion: 'push' },
+  Romantic: { tint: '239,153,184', tintAmount: .075, vignette: .24, grain: .012, glow: .2, lightLeak: .15, dust: 0, letterbox: .024, transition: 'light-leak', transitionSeconds: .76, zoom: .026, driftX: .012, driftY: .009, motion: 'float' },
+  'Happy & Energetic': { tint: '255,234,190', tintAmount: .012, vignette: .12, grain: 0, glow: .13, lightLeak: .025, dust: 0, letterbox: 0, transition: 'flash-cut', transitionSeconds: .24, zoom: .058, driftX: .018, driftY: .004, motion: 'pan' },
+  'Travel Adventure': { tint: '255,182,91', tintAmount: .055, vignette: .23, grain: .014, glow: .105, lightLeak: .085, dust: .42, letterbox: 0, transition: 'wipe', transitionSeconds: .72, zoom: .046, driftX: .045, driftY: .008, motion: 'pan' },
+  Nostalgic: { tint: '199,132,75', tintAmount: .075, vignette: .37, grain: .075, glow: .045, lightLeak: .09, dust: .72, letterbox: .018, transition: 'film-burn', transitionSeconds: .7, zoom: .022, driftX: .004, driftY: .003, motion: 'float' },
+  'Family & Memories': { tint: '255,210,157', tintAmount: .045, vignette: .2, grain: .008, glow: .075, lightLeak: .02, dust: 0, letterbox: .016, transition: 'crossfade', transitionSeconds: .62, zoom: .028, driftX: .006, driftY: .003, motion: 'push' },
+  Epic: { tint: '218,181,129', tintAmount: .026, vignette: .43, grain: .024, glow: .11, lightLeak: .035, dust: 0, letterbox: .052, transition: 'zoom-impact', transitionSeconds: .38, zoom: .078, driftX: .052, driftY: .008, motion: 'sweep' },
+  'Minimal & Elegant': { tint: '221,229,240', tintAmount: .01, vignette: .14, grain: 0, glow: .025, lightLeak: 0, dust: 0, letterbox: 0, transition: 'soft-fade', transitionSeconds: .42, zoom: .012, driftX: .002, driftY: .001, motion: 'push' },
+  Dreamy: { tint: '195,185,246', tintAmount: .06, vignette: .25, grain: .018, glow: .23, lightLeak: .115, dust: .1, letterbox: .018, transition: 'bloom', transitionSeconds: .78, zoom: .026, driftX: .015, driftY: .01, motion: 'float' },
 };
 
 export function makePlan(media: MediaItem[], settings: Settings): Scene[] {
@@ -250,6 +281,161 @@ function drawCover(ctx: CanvasRenderingContext2D, source: CanvasImageSource, sw:
   }
 }
 
+function seededNoise(seed: number) {
+  const value = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasElement, look: MoodEffectProfile, progress: number, width: number, height: number) {
+  const p = Math.max(0, Math.min(1, progress));
+  ctx.save();
+  if (look.transition === 'wipe') {
+    ctx.beginPath();
+    ctx.rect(p * width, 0, width * (1 - p), height);
+    ctx.clip();
+    ctx.drawImage(outgoing, 0, 0);
+  } else if (look.transition === 'flash-cut') {
+    const alpha = Math.pow(1 - p, 2) * .32 + Math.sin(p * Math.PI) * .08;
+    ctx.fillStyle = `rgba(255,248,231,${alpha})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (look.transition === 'zoom-impact') {
+    const scale = 1 + p * .12;
+    ctx.globalAlpha = 1 - p;
+    ctx.translate(width / 2, height / 2);
+    ctx.scale(scale, scale);
+    ctx.drawImage(outgoing, -width / 2, -height / 2, width, height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    const flash = Math.sin(p * Math.PI) ** 2 * .13;
+    if (flash > .005) {
+      ctx.fillStyle = `rgba(255,242,218,${flash})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else {
+    ctx.globalAlpha = 1 - p;
+    if (look.transition === 'bloom') ctx.filter = `blur(${(1 - p) * Math.min(width, height) * .018}px)`;
+    ctx.drawImage(outgoing, 0, 0);
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+
+    if (look.transition === 'light-leak') {
+      ctx.globalCompositeOperation = 'screen';
+      const centerX = width * (.12 + .76 * p);
+      const flare = ctx.createLinearGradient(centerX - width * .24, 0, centerX + width * .24, height);
+      flare.addColorStop(0, 'rgba(255,170,120,0)');
+      flare.addColorStop(.38, `rgba(${look.tint},${Math.sin(p * Math.PI) * .17})`);
+      flare.addColorStop(.52, `rgba(255,239,222,${Math.sin(p * Math.PI) * .32})`);
+      flare.addColorStop(.68, `rgba(${look.tint},${Math.sin(p * Math.PI) * .12})`);
+      flare.addColorStop(1, 'rgba(255,170,120,0)');
+      ctx.fillStyle = flare;
+      ctx.fillRect(0, 0, width, height);
+    } else if (look.transition === 'film-burn') {
+      ctx.globalCompositeOperation = 'screen';
+      const centerX = width * (p * 1.18 - .08);
+      const burn = ctx.createLinearGradient(centerX - width * .21, 0, centerX + width * .21, height);
+      burn.addColorStop(0, 'rgba(95,25,11,0)');
+      burn.addColorStop(.32, `rgba(227,75,23,${Math.sin(p * Math.PI) * .22})`);
+      burn.addColorStop(.49, `rgba(255,223,155,${Math.sin(p * Math.PI) * .38})`);
+      burn.addColorStop(.63, `rgba(255,116,34,${Math.sin(p * Math.PI) * .2})`);
+      burn.addColorStop(1, 'rgba(95,25,11,0)');
+      ctx.fillStyle = burn;
+      ctx.fillRect(0, 0, width, height);
+    } else if (look.transition === 'bloom') {
+      ctx.globalCompositeOperation = 'screen';
+      const bloom = ctx.createRadialGradient(width * .52, height * .45, 0, width * .52, height * .45, width * .7);
+      bloom.addColorStop(0, `rgba(239,224,255,${Math.sin(p * Math.PI) * .24})`);
+      bloom.addColorStop(.6, `rgba(${look.tint},${Math.sin(p * Math.PI) * .1})`);
+      bloom.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, width, height);
+    }
+  }
+  ctx.restore();
+}
+
+function drawMoodLook(ctx: CanvasRenderingContext2D, width: number, height: number, look: MoodEffectProfile, elapsed: number, sceneIndex: number) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.fillStyle = `rgba(${look.tint},${look.tintAmount})`;
+  ctx.fillRect(0, 0, width, height);
+
+  if (look.glow > 0) {
+    ctx.globalCompositeOperation = 'screen';
+    const pulse = .78 + .22 * Math.sin(elapsed * .62 + sceneIndex * .8);
+    const glow = ctx.createRadialGradient(width * .69, height * .12, 0, width * .69, height * .12, width * .68);
+    glow.addColorStop(0, `rgba(255,241,218,${look.glow * pulse})`);
+    glow.addColorStop(.42, `rgba(${look.tint},${look.glow * pulse * .38})`);
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  if (look.lightLeak > 0) {
+    ctx.globalCompositeOperation = 'screen';
+    const drift = .5 + .34 * Math.sin(elapsed * .43 + sceneIndex * 1.7);
+    const centerX = width * drift;
+    const leak = ctx.createLinearGradient(centerX - width * .3, 0, centerX + width * .3, height);
+    leak.addColorStop(0, 'rgba(255,188,116,0)');
+    leak.addColorStop(.42, `rgba(${look.tint},${look.lightLeak * .44})`);
+    leak.addColorStop(.53, `rgba(255,234,199,${look.lightLeak * .72})`);
+    leak.addColorStop(.64, `rgba(${look.tint},${look.lightLeak * .3})`);
+    leak.addColorStop(1, 'rgba(255,188,116,0)');
+    ctx.fillStyle = leak;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  if (look.vignette > 0) {
+    ctx.globalCompositeOperation = 'multiply';
+    const vignette = ctx.createRadialGradient(width * .5, height * .46, Math.min(width, height) * .22, width * .5, height * .46, Math.max(width, height) * .72);
+    vignette.addColorStop(0, 'rgba(255,255,255,1)');
+    vignette.addColorStop(.65, 'rgba(255,255,255,.98)');
+    vignette.addColorStop(1, `rgba(8,10,16,${look.vignette})`);
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  const textureFrame = Math.floor(elapsed * 4);
+  const grainCount = Math.round(look.grain * 360);
+  if (grainCount > 0) {
+    ctx.globalCompositeOperation = 'soft-light';
+    for (let i = 0; i < grainCount; i += 1) {
+      const seed = sceneIndex * 997 + textureFrame * 31 + i * 17;
+      const x = seededNoise(seed) * width;
+      const y = seededNoise(seed + 19.3) * height;
+      const alpha = look.grain * (.35 + seededNoise(seed + 7) * .55);
+      ctx.fillStyle = `rgba(${i % 2 ? '245,229,199' : '16,13,10'},${alpha})`;
+      const size = Math.max(1, width / 1920);
+      ctx.fillRect(x, y, size, size);
+    }
+  }
+
+  if (look.dust > 0) {
+    const dustPhase = Math.floor(elapsed * 1.8);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = `rgba(255,232,196,${look.dust * .13})`;
+    ctx.lineWidth = Math.max(1, width / 1600);
+    for (let i = 0; i < 3; i += 1) {
+      const seed = sceneIndex * 73 + dustPhase * 11 + i * 31;
+      const x = seededNoise(seed) * width;
+      const y = seededNoise(seed + 8) * height * .72;
+      const length = height * (.12 + seededNoise(seed + 22) * .3);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (seededNoise(seed + 5) - .5) * 3, y + length);
+      ctx.stroke();
+    }
+  }
+
+  if (look.letterbox > 0) {
+    const barHeight = Math.round(height * look.letterbox);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#08090d';
+    ctx.fillRect(0, 0, width, barHeight);
+    ctx.fillRect(0, height - barHeight, width, barHeight);
+  }
+  ctx.restore();
+}
+
 export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: Settings, onStatus: (status: RenderStatus) => void, cancelled: () => boolean): Promise<{ url: string; extension: string; mime: string; duration: number | null; width: number; height: number; hasAudio: boolean }> {
   const recording = supportedRecording(settings);
   if (!recording) throw new Error('MediaRecorder or canvas capture is unavailable in this browser.');
@@ -261,10 +447,14 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas rendering is unavailable.');
   const stream = canvas.captureStream(30);
-  const outgoingCanvas = document.createElement('canvas');
+  let outgoingCanvas = document.createElement('canvas');
   outgoingCanvas.width = width;
   outgoingCanvas.height = height;
-  const outgoingContext = outgoingCanvas.getContext('2d');
+  let outgoingContext = outgoingCanvas.getContext('2d');
+  let snapshotCanvas = document.createElement('canvas');
+  snapshotCanvas.width = width;
+  snapshotCanvas.height = height;
+  let snapshotContext = snapshotCanvas.getContext('2d');
   const audioRig = createAudioRig(stream, media);
   const hasAudio = stream.getAudioTracks().length > 0;
   const mime = recording.mime;
@@ -299,9 +489,11 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         image = video;
       }
       const m = moodNotes[settings.mood];
+      const look = moodEffects[settings.mood];
       const sceneStart = performance.now();
       const durationMs = scene.duration * 1000;
-      const transitionSeconds = settings.mood === 'Happy & Energetic' ? .16 : settings.mood === 'Epic' ? .12 : settings.mood === 'Travel Adventure' ? .7 : settings.mood === 'Romantic' || settings.mood === 'Dreamy' ? .62 : settings.mood === 'Minimal & Elegant' ? .36 : .48;
+      const fade = look.transitionSeconds * 1000;
+      let snapshotCaptured = false;
       while (performance.now() - sceneStart < durationMs) {
         if (cancelled()) throw new Error('Render cancelled.');
         const elapsed = performance.now() - sceneStart;
@@ -312,32 +504,26 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         ctx.filter = m.filter;
         const progress = elapsed / durationMs;
         const moodProgress = progress * Math.PI * 2;
-        const zoomPower = settings.mood === 'Happy & Energetic' ? .052 : settings.mood === 'Epic' ? .08 : settings.mood === 'Minimal & Elegant' ? .012 : settings.mood === 'Dreamy' ? .025 : settings.mood === 'Nostalgic' ? .023 : settings.mood === 'Travel Adventure' ? .042 : .032;
-        const breathing = settings.mood === 'Dreamy' || settings.mood === 'Romantic' ? Math.sin(moodProgress) * .012 : 0;
-        const zoom = 1 + zoomPower * progress + breathing;
-        const drift = settings.mood === 'Travel Adventure' || settings.mood === 'Epic' ? (progress - .5) * width * .04 : settings.mood === 'Family & Memories' ? Math.sin(moodProgress / 2) * width * .009 : settings.mood === 'Dreamy' || settings.mood === 'Romantic' ? Math.sin(moodProgress / 2) * width * .012 : settings.mood === 'Happy & Energetic' ? (progress - .5) * width * .015 : 0;
+        const breathing = look.motion === 'float' ? Math.sin(moodProgress) * .009 : 0;
+        const zoom = 1 + look.zoom * progress + breathing;
+        const driftProgress = look.motion === 'pan' || look.motion === 'sweep' ? progress - .5 : Math.sin(moodProgress / 2);
+        const driftX = driftProgress * width * look.driftX;
+        const driftY = Math.sin(moodProgress / 2) * height * look.driftY;
         ctx.save();
-        ctx.translate(width / 2 + drift, height / 2);
+        ctx.translate(width / 2 + driftX, height / 2 + driftY);
         ctx.scale(zoom, zoom);
         ctx.translate(-width / 2, -height / 2);
         drawCover(ctx, image, iw, ih, width, height, settings.fit);
         ctx.restore();
         ctx.filter = 'none';
-        const fade = transitionSeconds * 1000;
-        if (index > 0 && outgoingContext && elapsed < fade) {
-          const progress = Math.min(1, elapsed / fade);
-          ctx.save();
-          if (settings.mood === 'Travel Adventure') {
-            ctx.beginPath();
-            ctx.rect(progress * width, 0, width * (1 - progress), height);
-            ctx.clip();
-            ctx.drawImage(outgoingCanvas, 0, 0);
-          } else if (settings.mood !== 'Happy & Energetic') {
-            ctx.globalAlpha = 1 - progress;
-            ctx.drawImage(outgoingCanvas, 0, 0);
-          }
-          ctx.restore();
+        if (durationMs - elapsed < fade + 140 && snapshotContext) {
+          snapshotContext.drawImage(canvas, 0, 0);
+          snapshotCaptured = true;
         }
+        if (index > 0 && outgoingContext && elapsed < fade) {
+          drawTransition(ctx, outgoingCanvas, look, elapsed / fade, width, height);
+        }
+        drawMoodLook(ctx, width, height, look, elapsed / 1000, index);
         if (index === scenes.length - 1 && durationMs - elapsed < fade) {
           const progress = Math.max(0, 1 - (durationMs - elapsed) / fade);
           ctx.fillStyle = `rgba(14,16,22,${progress * (settings.mood === 'Epic' ? .75 : .45)})`;
@@ -346,7 +532,12 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         onStatus({ stage: `Applying effects and encoding scene ${index + 1} of ${scenes.length}`, elapsed: (performance.now() - startedAt) / 1000 });
         await new Promise((resolve) => window.setTimeout(resolve, 33));
       }
-      outgoingContext?.drawImage(canvas, 0, 0);
+      if (snapshotCaptured && snapshotContext) {
+        [outgoingCanvas, snapshotCanvas] = [snapshotCanvas, outgoingCanvas];
+        [outgoingContext, snapshotContext] = [snapshotContext, outgoingContext];
+      } else {
+        outgoingContext?.drawImage(canvas, 0, 0);
+      }
       video?.pause();
       if (video) { video.removeAttribute('src'); video.load(); }
       const progress = Math.min(99, Math.round((scene.start + scene.duration) / total * 100));

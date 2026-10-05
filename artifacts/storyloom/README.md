@@ -19,6 +19,7 @@ The app does not require the shared API server, a database, or external API cred
 - Storyloom selects MP4 only when the browser reports that MIME type as supported; otherwise it records WebM when available. The download extension follows the browser's actual output MIME type.
 - Output is 1280 × 720 or 1920 × 1080. The current renderer does not offer 4K.
 - A render runs in real time and can take at least as long as the requested film duration. Browser codec availability, available memory, and mobile power limits vary.
+- Every mood applies a distinct stack of color treatment, camera motion, vignette/bloom, grain or dust, and optional letterbox matte. Scene changes use mood-specific crossfades, directional wipes, light leaks, film burns, flash cuts, zoom impacts, or bloom dissolves. The selected stack is listed in the story plan.
 - Local music tracks are sequenced and crossfaded through Web Audio when available. Original clip audio is included at a lower level during video scenes where the browser exposes a usable audio graph. Browsers without local audio mixing produce a video without an audio track.
 - Before download is offered, Storyloom checks that the browser can read the recorded video metadata and that its frame dimensions match the chosen output size. Some browsers do not expose finite duration metadata for recordings; in that case the target duration is shown as approximate.
 
