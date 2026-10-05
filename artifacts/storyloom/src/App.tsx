@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
 import { AlertCircle, Aperture, AudioLines, Check, CircleHelp, Clapperboard, Clock3, Download, FileAudio2, FileImage, FileVideo2, FolderOpen, HardDrive, ImagePlus, LoaderCircle, Music2, Pause, Play, Plus, RotateCcw, Save, Settings2, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { formatBytes, formatDuration, inspectFiles, sortByCapture, type MediaItem } from './lib/media';
-import { makePlan, moodEffects, moodNotes, moods, recordFilm, supportedRecording, type RenderStatus } from './lib/render';
-import { useTemplates, type Settings, type Template } from './lib/templates';
+import { effectOptions, makePlan, moodNotes, moods, recordFilm, resolveMoodLook, supportedRecording, transitionOptions, type RenderStatus } from './lib/render';
+import { defaultSettings, useTemplates, type EffectId, type Settings, type Template, type TransitionPreference } from './lib/templates';
 
-const defaults: Settings = { duration: 60, customDuration: 75, quality: '1080p', mood: 'Cinematic', fit: 'fill' };
 const timeChoices = [{ value: 30, label: '30 sec' }, { value: 60, label: '1 min' }, { value: 120, label: '2 min' }, { value: 180, label: '3 min' }, { value: 300, label: '5 min' }, { value: 0, label: 'Custom' }];
 const iconFor = (kind: MediaItem['kind']) => kind === 'image' ? FileImage : kind === 'video' ? FileVideo2 : FileAudio2;
 const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise' };
@@ -12,7 +11,8 @@ const fmtTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.
 
 function App() {
   const [media, setMedia] = useState<MediaItem[]>([]);
-  const [settings, setSettings] = useState<Settings>(defaults);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [sceneTimings, setSceneTimings] = useState<Record<string, number>>({});
   const [scanBusy, setScanBusy] = useState(false);
   const [report, setReport] = useState<{ accepted: number; rejected: string[]; duplicateCount: number } | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -34,16 +34,17 @@ function App() {
   const mediaRef = useRef(media);
   mediaRef.current = media;
   const { templates, save, update, remove, duplicate, importFile } = useTemplates();
-  const plan = useMemo(() => makePlan(media, settings), [media, settings]);
+  const plan = useMemo(() => makePlan(media, settings, sceneTimings), [media, settings, sceneTimings]);
   const photos = media.filter((item) => item.kind === 'image');
   const videos = media.filter((item) => item.kind === 'video');
   const audio = media.filter((item) => item.kind === 'audio');
   const readableVisuals = media.filter((item) => item.readable && item.kind !== 'audio');
   const recorderCapability = supportedRecording(settings);
-  const activeLook = moodEffects[settings.mood];
+  const { profile: activeLook, filter: activeFilter } = resolveMoodLook(settings);
   const folderSupported = typeof HTMLInputElement !== 'undefined' && 'webkitdirectory' in HTMLInputElement.prototype;
   const audioMixSupported = typeof window.AudioContext !== 'undefined';
   const filmDuration = settings.duration === 0 ? settings.customDuration : settings.duration;
+  const plannedDuration = plan.length ? plan.reduce((sum, scene) => sum + scene.duration, 0) : filmDuration;
   const selectedScene = plan[Math.min(previewIndex, Math.max(plan.length - 1, 0))];
   const canRender = !!plan.length && !!recorderCapability && !rendering;
   const inputAccept = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/aac,audio/webm,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.mp3,.wav,.ogg,.m4a,.aac';
@@ -78,14 +79,22 @@ function App() {
       setReport(result.report);
     } finally { setScanBusy(false); }
   };
-  const removeMedia = (id: string) => setMedia((all) => {
-    const removed = all.find((item) => item.id === id);
-    if (removed) URL.revokeObjectURL(removed.url);
-    return all.filter((item) => item.id !== id);
-  });
+  const removeMedia = (id: string) => {
+    setSceneTimings((timings) => {
+      const next = { ...timings };
+      delete next[id];
+      return next;
+    });
+    setMedia((all) => {
+      const removed = all.find((item) => item.id === id);
+      if (removed) URL.revokeObjectURL(removed.url);
+      return all.filter((item) => item.id !== id);
+    });
+  };
   const clearCollection = () => {
     media.forEach((item) => URL.revokeObjectURL(item.url));
     setMedia([]);
+    setSceneTimings({});
     setReport(null);
     setPreviewing(false);
   };
@@ -159,6 +168,23 @@ function App() {
     setSettings((current) => ({ ...current, [key]: value }));
     setActiveTemplate(null);
   };
+  const setEffectEnabled = (id: EffectId, enabled: boolean) => {
+    setSettings((current) => ({ ...current, enabledEffects: { ...current.enabledEffects, [id]: enabled } }));
+    setActiveTemplate(null);
+  };
+  const setSceneDuration = (id: string, duration: number) => {
+    if (!Number.isFinite(duration) || duration < 1) return;
+    setSceneTimings((current) => ({ ...current, [id]: Math.min(600, Math.round(duration * 10) / 10) }));
+    setPreviewing(false);
+  };
+  const resetSceneDuration = (id: string) => setSceneTimings((current) => {
+    const next = { ...current };
+    delete next[id];
+    return next;
+  });
+  const transitionLabel = settings.transitionStyle === 'mood'
+    ? moodNotes[settings.mood].transition
+    : transitionOptions.find((option) => option.value === settings.transitionStyle)?.label ?? 'Cross-dissolve';
   const onPicker = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) void addFiles(event.target.files);
     event.target.value = '';
@@ -266,6 +292,43 @@ function App() {
               <span className="mood-swatch"><i /><i /><i /></span><span className="mood-copy"><strong>{mood}</strong><small>{moodShort[mood] ?? moodNotes[mood].grade}</small></span>{settings.mood === mood && <span className="mood-check"><Check size={13} /></span>}
             </button>)}
           </div>
+          <div className="look-editor">
+            <div className="look-editor-head">
+              <div><span className="eyebrow">YOUR CUSTOM CUT</span><h3>Effects &amp; transitions</h3><p>Start with the mood, then tune the treatment before you render.</p></div>
+              <button className="text-button" onClick={() => { setSettings((current) => ({ ...current, enabledEffects: { ...defaultSettings.enabledEffects }, effectStrength: defaultSettings.effectStrength, transitionStyle: defaultSettings.transitionStyle, transitionDuration: defaultSettings.transitionDuration, useMoodTransitionDuration: true })); setActiveTemplate(null); }}><RotateCcw size={13} />Reset controls</button>
+            </div>
+            <div className="look-control-grid">
+              <div className="effect-control-panel">
+                <div className="setting-label"><Sparkles size={14} /><span>VISUAL EFFECTS</span></div>
+                <div className="effect-control-list">
+                  {effectOptions.map((effect) => <label className="effect-toggle" key={effect.id}>
+                    <input type="checkbox" checked={settings.enabledEffects[effect.id]} onChange={(event) => setEffectEnabled(effect.id, event.target.checked)} />
+                    <span className="effect-toggle-copy"><strong>{effect.label}</strong><small>{effect.detail}</small></span>
+                  </label>)}
+                </div>
+                <label className="custom-range">
+                  <span className="custom-range-heading"><span><strong>Effect strength</strong><small>Adjusts motion, tint and atmosphere</small></span><b>{settings.effectStrength}%</b></span>
+                  <input aria-label="Effect strength" type="range" min={0} max={100} step={1} value={settings.effectStrength} onChange={(event) => setSetting('effectStrength', Number(event.target.value))} />
+                </label>
+              </div>
+              <div className="transition-control-panel">
+                <div className="setting-label"><Clapperboard size={14} /><span>SCENE TRANSITION</span></div>
+                <label className="transition-select-label"><span>Transition style</span>
+                  <select className="field" value={settings.transitionStyle} onChange={(event) => setSetting('transitionStyle', event.target.value as TransitionPreference)}>
+                    {transitionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label className="custom-range transition-range">
+                  <span className="custom-range-heading"><span><strong>Transition duration</strong><small>{settings.useMoodTransitionDuration ? 'Following the mood preset' : 'Custom timing · short scenes adapt automatically'}</small></span><b>{settings.transitionStyle === 'none' ? 'Off' : `${activeLook.transitionSeconds.toFixed(2)} s`}</b></span>
+                  <input aria-label="Transition duration in seconds" type="range" min={0.15} max={2} step={0.05} value={activeLook.transitionSeconds} disabled={settings.transitionStyle === 'none'} onChange={(event) => { setSettings((current) => ({ ...current, transitionDuration: Number(event.target.value), useMoodTransitionDuration: false })); setActiveTemplate(null); }} />
+                  {!settings.useMoodTransitionDuration && <button type="button" className="use-mood-timing" onClick={() => { setSettings((current) => ({ ...current, useMoodTransitionDuration: true })); setActiveTemplate(null); }}>Use mood timing</button>}
+                </label>
+                <div className="transition-current"><span>Applied transition</span><strong>{transitionLabel}</strong></div>
+                <p className="transition-note">Transition time is contained within each scene. Total film time is the sum of your scene timings.</p>
+              </div>
+            </div>
+            <p className="look-editor-footnote">Saved looks keep these effect and transition choices. Scene timings are specific to the current media and are not included in templates.</p>
+          </div>
           <div className="fit-row"><div><strong>Frame your photos</strong><span>Choose whether to preserve the whole image or fill the widescreen frame.</span></div><div className="segmented"><button onClick={() => setSetting('fit', 'fill')} className={settings.fit === 'fill' ? 'active' : ''} aria-pressed={settings.fit === 'fill'}>Fill frame</button><button onClick={() => setSetting('fit', 'fit')} className={settings.fit === 'fit' ? 'active' : ''} aria-pressed={settings.fit === 'fit'}>Show whole photo</button></div></div>
 
           <div className="templates-panel">
@@ -286,12 +349,12 @@ function App() {
         <section id="storyboard" className="section-block storyboard-block">
           <div className="section-head">
             <div className="section-heading"><span className="section-index">03</span><div><h2>Shape the story</h2><p>A local-first edit, arranged in capture order and made from your actual media.</p></div></div>
-            <div className="story-total"><span>ESTIMATED RUN TIME</span><strong>{fmtTime(filmDuration)}</strong></div>
+            <div className="story-total"><span>ESTIMATED RUN TIME</span><strong>{fmtTime(plannedDuration)}</strong></div>
           </div>
           <div className="story-layout">
             <div className="preview-monitor">
               <div className="monitor-top"><span><span className="live-dot" />STORY PREVIEW</span><span>16:9 · {settings.quality}</span></div>
-              <div className="monitor-image" data-motion={activeLook.motion} data-transition={activeLook.transition} style={{ '--mood-filter': moodNotes[settings.mood].filter, '--look-tint': `rgb(${activeLook.tint})`, '--look-vignette': activeLook.vignette, '--look-glow': activeLook.glow, '--look-leak': activeLook.lightLeak, '--look-grain': activeLook.grain, '--look-bars': `${activeLook.letterbox * 100}%`, '--look-transition-duration': `${activeLook.transitionSeconds}s`, '--look-zoom': String(1 + activeLook.zoom), '--look-motion-name': `preview-${activeLook.motion}` } as CSSProperties}>
+              <div className="monitor-image" data-motion={activeLook.motion} data-transition={activeLook.transition} style={{ '--mood-filter': activeFilter, '--look-tint': `rgb(${activeLook.tint})`, '--look-vignette': activeLook.vignette, '--look-glow': activeLook.glow, '--look-leak': activeLook.lightLeak, '--look-grain': activeLook.grain, '--look-bars': `${activeLook.letterbox * 100}%`, '--look-transition-duration': `${activeLook.transitionSeconds}s`, '--look-zoom': String(1 + activeLook.zoom), '--look-motion-name': `preview-${activeLook.motion}` } as CSSProperties}>
                 {selectedScene?.item.kind === 'image' && <img key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} alt={`Preview scene: ${selectedScene.item.file.name}`} />}
                 {selectedScene?.item.kind === 'video' && <video key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} muted playsInline autoPlay loop />}
                 {selectedScene && <><div className="preview-vignette" /><div className="preview-bloom" /><div className="preview-light-leak" /><div className="preview-grain" /><div className="preview-matte" /><div key={`${selectedScene.item.id}-${previewIndex}-${activeLook.transition}`} className="preview-transition" /></>}
@@ -301,17 +364,23 @@ function App() {
               <div className="monitor-controls"><button className="preview-play" onClick={() => { if (plan.length < 2) return; setPreviewing((value) => !value); }} aria-label={previewing ? 'Pause story preview' : 'Play story preview'} disabled={plan.length < 2}>{previewing ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}</button><div className="preview-track"><span style={{ width: `${plan.length ? (previewIndex + 1) / plan.length * 100 : 0}%` }} /></div><span className="mono preview-time">{plan.length ? `${String(previewIndex + 1).padStart(2, '0')} / ${String(plan.length).padStart(2, '0')}` : '— / —'}</span></div>
             </div>
             <div className="plan-panel">
-              <div className="plan-topline"><div><span className="eyebrow">AUTOMATIC STORY PLAN</span><h3>{plan.length ? `${plan.length} scenes, one thread` : 'Waiting for moments'}</h3></div><button className="text-button" onClick={() => { setPreviewing(false); setPreviewIndex(0); }} disabled={!plan.length}><RotateCcw size={13} />Reset preview</button></div>
+              <div className="plan-topline"><div><span className="eyebrow">EDITABLE STORY PLAN</span><h3>{plan.length ? `${plan.length} scenes, one thread` : 'Waiting for moments'}</h3></div><button className="text-button" onClick={() => { setPreviewing(false); setPreviewIndex(0); }} disabled={!plan.length}><RotateCcw size={13} />Reset preview</button></div>
               {plan.length ? <div className="timeline">
                 {plan.map((scene, index) => <button className={`timeline-scene ${previewIndex === index ? 'current' : ''}`} key={`${scene.item.id}-${index}`} onClick={() => { setPreviewIndex(index); setPreviewing(false); }} aria-label={`Preview scene ${index + 1}: ${scene.item.file.name}`} data-testid={`scene-${index + 1}`}>
-                  <div className="timeline-thumb">{scene.item.kind === 'image' ? <img src={scene.item.url} alt="" /> : <video src={scene.item.url} muted playsInline preload="metadata" />}</div><span className="timeline-number">{String(index + 1).padStart(2, '0')}</span><span className="timeline-info"><strong>{scene.item.file.name}</strong><small>{scene.item.kind} · {fmtTime(scene.duration)}</small></span><span className="timeline-line" />
+                  <div className="timeline-thumb">{scene.item.kind === 'image' ? <img src={scene.item.url} alt="" /> : <video src={scene.item.url} muted playsInline preload="metadata" />}</div><span className="timeline-number">{String(index + 1).padStart(2, '0')}</span><span className="timeline-info"><strong>{scene.item.file.name}</strong><small>{scene.item.kind} · {scene.duration.toFixed(1)} s</small></span><span className="timeline-line" />
                 </button>)}
               </div> : <div className="plan-empty"><Clapperboard size={22} /><span>Nothing to arrange just yet.</span><small>Readable photos and video clips will form a deterministic scene plan. Audio is optional.</small></div>}
-              <div className="plan-recipe"><div className="recipe-item"><span className="recipe-dot" /><span><small>MOOD</small><strong>{settings.mood}</strong></span></div><div className="recipe-item"><span className="recipe-dot gold" /><span><small>LOOK</small><strong>{moodNotes[settings.mood].grade}</strong></span></div><div className="recipe-item"><span className="recipe-dot sage" /><span><small>MOTION</small><strong>{moodNotes[settings.mood].motion}</strong></span></div><div className="recipe-item"><span className="recipe-dot lavender" /><span><small>TRANSITION</small><strong>{moodNotes[settings.mood].transition}</strong></span></div><div className="effect-stack"><small>APPLIED EFFECTS</small><div>{moodNotes[settings.mood].effects.map((effect) => <span key={effect}>{effect}</span>)}</div></div></div>
+              <div className="plan-recipe"><div className="recipe-item"><span className="recipe-dot" /><span><small>MOOD</small><strong>{settings.mood}</strong></span></div><div className="recipe-item"><span className="recipe-dot gold" /><span><small>LOOK</small><strong>{settings.enabledEffects.colorGrade ? moodNotes[settings.mood].grade : 'Original color'}</strong></span></div><div className="recipe-item"><span className="recipe-dot sage" /><span><small>MOTION</small><strong>{settings.enabledEffects.cameraMove && settings.effectStrength > 0 ? moodNotes[settings.mood].motion : 'Static frame'}</strong></span></div><div className="recipe-item"><span className="recipe-dot lavender" /><span><small>TRANSITION</small><strong>{transitionLabel}{settings.transitionStyle !== 'none' ? ` · ${activeLook.transitionSeconds.toFixed(2)}s` : ''}</strong></span></div><div className="effect-stack"><small>APPLIED EFFECTS</small><div>{effectOptions.filter((effect) => settings.enabledEffects[effect.id]).map((effect) => <span key={effect.id}>{effect.label}</span>)}{!effectOptions.some((effect) => settings.enabledEffects[effect.id]) && <span>Clean image</span>}</div></div></div>
             </div>
           </div>
+          {selectedScene && <div className="scene-timing-panel">
+            <div className="scene-timing-copy"><span className="eyebrow">SHOT TIMING</span><strong>Scene {previewIndex + 1} · {selectedScene.item.file.name}</strong><small>Set how long this moment holds. Changing timings changes the total film length.</small></div>
+            <label className="scene-duration-input"><span>Duration</span><span className="scene-duration-field"><input aria-label={`Scene ${previewIndex + 1} duration in seconds`} type="number" min={1} max={600} step={0.1} value={selectedScene.duration.toFixed(1)} onChange={(event) => setSceneDuration(selectedScene.item.id, event.target.valueAsNumber)} /><span>sec</span></span></label>
+            <button className="btn btn-quiet small-btn" onClick={() => resetSceneDuration(selectedScene.item.id)} title="Use the automatic duration for this scene">Auto</button>
+            <button className="text-button reset-all-timings" onClick={() => setSceneTimings({})} disabled={!Object.keys(sceneTimings).length}><RotateCcw size={13} />Reset all</button>
+          </div>}
           <div className="limitations">
-            <div className="limit-icon"><AlertCircle size={16} /></div><div><strong>Keep an eye on the available moments</strong><p>{!readableVisuals.length ? 'No readable photos or video yet. The renderer needs at least one visual scene.' : plan.length < 4 ? `Only ${plan.length} scene${plan.length === 1 ? '' : 's'} available. The film can run longer than your footage; each moment will be held for the scene duration.` : `The ${settings.mood.toLowerCase()} look layers color grading, camera motion, texture and its own scene transition. This browser records in real time, so a ${fmtTime(filmDuration)} film takes at least that long to make.`} Readable soundtracks are sequenced, crossfaded and faded out; original clip audio is mixed more quietly under music when browser audio mixing is available.</p></div>
+            <div className="limit-icon"><AlertCircle size={16} /></div><div><strong>Keep an eye on the available moments</strong><p>{!readableVisuals.length ? 'No readable photos or video yet. The renderer needs at least one visual scene.' : plan.length < 4 ? `Only ${plan.length} scene${plan.length === 1 ? '' : 's'} available. The film can run longer than your footage; each moment will be held for the scene duration.` : `Your ${settings.mood.toLowerCase()} look is customized with the selected effects and transitions. This browser records in real time, so a ${fmtTime(plannedDuration)} film takes at least that long to make.`} Readable soundtracks are sequenced, crossfaded and faded out; original clip audio is mixed more quietly under music when browser audio mixing is available.</p></div>
           </div>
           {audio.length > 0 && <div className="audio-note"><Music2 size={15} /><span><strong>{audio.filter((item) => item.readable).length} readable soundtrack{audio.filter((item) => item.readable).length === 1 ? '' : 's'} found.</strong> {audioMixSupported ? 'Readable tracks are ordered by file date and name, then crossfaded locally. Original clip audio is included at a lower level where available.' : 'This browser does not expose local audio mixing; video export will be silent.'}</span></div>}
           {audio.length === 0 && videos.some((item) => item.readable) && <div className="audio-note"><FileVideo2 size={15} /><span>{audioMixSupported ? 'Original audio from readable video clips is included when present; you can add music if you want a soundtrack.' : 'This browser does not expose local audio mixing; video export will be silent.'}</span></div>}

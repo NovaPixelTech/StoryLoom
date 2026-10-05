@@ -1,5 +1,5 @@
 import type { MediaItem } from './media';
-import type { Mood, Settings } from './templates';
+import type { EffectId, Mood, Settings, TransitionPreference, TransitionStyle } from './templates';
 
 export type Scene = { item: MediaItem; start: number; duration: number };
 export type RenderStatus = {
@@ -18,8 +18,7 @@ export type RenderStatus = {
 };
 
 export const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy'];
-export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom';
-type MotionStyle = 'push' | 'pan' | 'float' | 'sweep';
+type MotionStyle = 'push' | 'pan' | 'float' | 'sweep' | 'still';
 export type MoodEffectProfile = {
   tint: string;
   tintAmount: number;
@@ -29,7 +28,7 @@ export type MoodEffectProfile = {
   lightLeak: number;
   dust: number;
   letterbox: number;
-  transition: TransitionStyle;
+  transition: TransitionStyle | 'none';
   transitionSeconds: number;
   zoom: number;
   driftX: number;
@@ -61,7 +60,57 @@ export const moodEffects: Record<Mood, MoodEffectProfile> = {
   Dreamy: { tint: '195,185,246', tintAmount: .06, vignette: .25, grain: .018, glow: .23, lightLeak: .115, dust: .1, letterbox: .018, transition: 'bloom', transitionSeconds: .78, zoom: .026, driftX: .015, driftY: .01, motion: 'float' },
 };
 
-export function makePlan(media: MediaItem[], settings: Settings): Scene[] {
+export const effectOptions: { id: EffectId; label: string; detail: string }[] = [
+  { id: 'colorGrade', label: 'Mood color grade', detail: 'Preset color and tone' },
+  { id: 'cameraMove', label: 'Camera movement', detail: 'Slow pan, push, or drift' },
+  { id: 'vignette', label: 'Vignette', detail: 'Soft edge shading' },
+  { id: 'filmGrain', label: 'Film grain', detail: 'Fine moving texture' },
+  { id: 'glow', label: 'Highlight bloom', detail: 'Soft light around highlights' },
+  { id: 'lightLeak', label: 'Light leaks', detail: 'Subtle drifting flare' },
+  { id: 'dust', label: 'Dust & scratches', detail: 'Film texture where the mood uses it' },
+  { id: 'letterbox', label: 'Cinema matte', detail: 'Widescreen top and bottom bars' },
+];
+
+export const transitionOptions: { value: TransitionPreference; label: string }[] = [
+  { value: 'mood', label: 'Mood default' },
+  { value: 'none', label: 'No transition' },
+  { value: 'crossfade', label: 'Cross-dissolve' },
+  { value: 'wipe', label: 'Directional wipe' },
+  { value: 'light-leak', label: 'Light-leak dissolve' },
+  { value: 'film-burn', label: 'Film burn' },
+  { value: 'flash-cut', label: 'Soft flash cut' },
+  { value: 'zoom-impact', label: 'Zoom impact' },
+  { value: 'soft-fade', label: 'Soft fade' },
+  { value: 'bloom', label: 'Luminous bloom' },
+];
+
+export function resolveMoodLook(settings: Settings): { profile: MoodEffectProfile; filter: string } {
+  const base = moodEffects[settings.mood];
+  const enabled = settings.enabledEffects;
+  const strength = Math.min(1, Math.max(0, settings.effectStrength / 100));
+  const transition = settings.transitionStyle === 'mood' ? base.transition : settings.transitionStyle;
+  return {
+    filter: enabled.colorGrade ? moodNotes[settings.mood].filter : 'none',
+    profile: {
+      ...base,
+      tintAmount: enabled.colorGrade ? base.tintAmount * strength : 0,
+      vignette: enabled.vignette ? base.vignette * strength : 0,
+      grain: enabled.filmGrain ? base.grain * strength : 0,
+      glow: enabled.glow ? base.glow * strength : 0,
+      lightLeak: enabled.lightLeak ? base.lightLeak * strength : 0,
+      dust: enabled.dust ? base.dust * strength : 0,
+      letterbox: enabled.letterbox ? base.letterbox * strength : 0,
+      zoom: enabled.cameraMove ? base.zoom * strength : 0,
+      driftX: enabled.cameraMove ? base.driftX * strength : 0,
+      driftY: enabled.cameraMove ? base.driftY * strength : 0,
+      motion: enabled.cameraMove && strength > 0 ? base.motion : 'still',
+      transition,
+      transitionSeconds: settings.useMoodTransitionDuration ? base.transitionSeconds : settings.transitionDuration,
+    },
+  };
+}
+
+export function makePlan(media: MediaItem[], settings: Settings, sceneTimings: Record<string, number> = {}): Scene[] {
   const photosAndVideos = media.filter((item) => item.readable && item.kind !== 'audio');
   const sorted = [...photosAndVideos].sort((a, b) => a.file.lastModified - b.file.lastModified || a.file.name.localeCompare(b.file.name));
   if (!sorted.length) return [];
@@ -71,8 +120,12 @@ export function makePlan(media: MediaItem[], settings: Settings): Scene[] {
   const per = duration / selected.length;
   let start = 0;
   return selected.map((item, index) => {
-    const scene = { item, start, duration: index === selected.length - 1 ? duration - start : per };
-    start += per;
+    const remainingScenes = selected.length - index - 1;
+    const available = Math.max(1, 600 - start - remainingScenes);
+    const requested = sceneTimings[item.id];
+    const sceneDuration = Number.isFinite(requested) ? Math.max(1, Math.min(available, requested)) : Math.min(available, per);
+    const scene = { item, start, duration: sceneDuration };
+    start += sceneDuration;
     return scene;
   });
 }
@@ -288,6 +341,7 @@ function seededNoise(seed: number) {
 
 function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasElement, look: MoodEffectProfile, progress: number, width: number, height: number) {
   const p = Math.max(0, Math.min(1, progress));
+  if (look.transition === 'none') return;
   ctx.save();
   if (look.transition === 'wipe') {
     ctx.beginPath();
@@ -488,11 +542,10 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         if (audioRig?.attachVideo(video)) video.muted = false;
         image = video;
       }
-      const m = moodNotes[settings.mood];
-      const look = moodEffects[settings.mood];
+      const { profile: look, filter } = resolveMoodLook(settings);
       const sceneStart = performance.now();
       const durationMs = scene.duration * 1000;
-      const fade = look.transitionSeconds * 1000;
+      const fade = look.transition === 'none' ? 0 : Math.min(look.transitionSeconds, scene.duration * .4) * 1000;
       let snapshotCaptured = false;
       while (performance.now() - sceneStart < durationMs) {
         if (cancelled()) throw new Error('Render cancelled.');
@@ -501,7 +554,7 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         if (video && video.duration && video.currentTime > video.duration - .08) video.currentTime = 0;
         audioRig?.updateMix(item.kind === 'video', elapsed / 1000, total);
         const iw = item.width || (video?.videoWidth ?? width), ih = item.height || (video?.videoHeight ?? height);
-        ctx.filter = m.filter;
+        ctx.filter = filter;
         const progress = elapsed / durationMs;
         const moodProgress = progress * Math.PI * 2;
         const breathing = look.motion === 'float' ? Math.sin(moodProgress) * .009 : 0;
@@ -520,11 +573,11 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
           snapshotContext.drawImage(canvas, 0, 0);
           snapshotCaptured = true;
         }
-        if (index > 0 && outgoingContext && elapsed < fade) {
+        if (index > 0 && outgoingContext && fade > 0 && elapsed < fade) {
           drawTransition(ctx, outgoingCanvas, look, elapsed / fade, width, height);
         }
         drawMoodLook(ctx, width, height, look, elapsed / 1000, index);
-        if (index === scenes.length - 1 && durationMs - elapsed < fade) {
+        if (index === scenes.length - 1 && fade > 0 && durationMs - elapsed < fade) {
           const progress = Math.max(0, 1 - (durationMs - elapsed) / fade);
           ctx.fillStyle = `rgba(14,16,22,${progress * (settings.mood === 'Epic' ? .75 : .45)})`;
           ctx.fillRect(0, 0, width, height);
