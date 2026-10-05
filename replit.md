@@ -1,45 +1,47 @@
-# [Project name]
+# Storyloom
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Storyloom creates cinematic memory films from a user's local photos, video clips, and soundtrack files without uploading personal media.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Run the managed `artifacts/storyloom: web` workflow for the app preview.
+- `pnpm --filter @workspace/storyloom run typecheck` — check the app's TypeScript.
+- `PORT=5000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/storyloom run build` — build the Vite app outside its workflow.
+- See `artifacts/storyloom/README.md` for local rendering and browser limitations.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- pnpm workspace, React, Vite, TypeScript
+- Browser-native file APIs, Canvas capture, `MediaRecorder`, and Web Audio
+- No API, database, authentication, or remote media storage is required by Storyloom.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/storyloom/src/App.tsx` — creation workflow and user interface.
+- `artifacts/storyloom/src/lib/media.ts` — local media intake and metadata.
+- `artifacts/storyloom/src/lib/render.ts` — scene planning, rendering, audio mix, and output validation.
+- `artifacts/storyloom/src/lib/templates.ts` — browser-local creative templates.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Keep personal source media inside the browser session; do not add remote processing or analytics of media.
+- Record canvas output in real time using the browser's reported media format support.
+- Offer 720p and 1080p only; 4K is not available in the current local renderer.
+- Persist creative settings only; selected media must be reselected after refresh.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users select local media, choose film length, output size, and one of nine creative moods, preview an automatically arranged story, render a video, and save or reuse creative templates.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Do not commit or deploy automatically; let the user review the app before deciding.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The Vite config requires `PORT` and `BASE_PATH`; the managed workflow provides them. The manual build command above sets them explicitly.
+- Rendering is real time. Codec, folder-picker, audio-mixing, and duration-metadata support varies by browser; the app must report unavailable capabilities rather than claim success.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
