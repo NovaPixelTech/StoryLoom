@@ -507,6 +507,10 @@ button { cursor: pointer; }
 .mood-swatch i:nth-child(2) { height:76%;opacity:.9; }
 .mood-swatch i:nth-child(3) { height:55%;opacity:.62; }
 .mood-0 {--swatch-a:#22242e;--swatch-b:#734a3c;--swatch-c:#d6b17a}.mood-1 {--swatch-a:#542e3b;--swatch-b:#c28284;--swatch-c:#eccbb1}.mood-2 {--swatch-a:#42716b;--swatch-b:#d5a951;--swatch-c:#e6d79a}.mood-3 {--swatch-a:#253b47;--swatch-b:#ba7650;--swatch-c:#d9bb82}.mood-4 {--swatch-a:#524538;--swatch-b:#9c6e4d;--swatch-c:#d3a678}.mood-5 {--swatch-a:#54645a;--swatch-b:#b38368;--swatch-c:#d6c2a0}.mood-6 {--swatch-a:#262d3b;--swatch-b:#80584e;--swatch-c:#d6bd93}.mood-7 {--swatch-a:#52616a;--swatch-b:#958d81;--swatch-c:#d6d1c1}.mood-8 {--swatch-a:#6b5973;--swatch-b:#cb9a92;--swatch-c:#dfc2b9}
+.mood-choice.mood-0:last-child { --swatch-a:#182c36;--swatch-b:#42788a;--swatch-c:#b8e5ee; }
+.overlay-panel { margin-top:18px; }
+.overlay-fields { display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:14px;margin-top:12px; }
+@media (max-width: 700px) { .overlay-fields { grid-template-columns:1fr; } }
 .mood-copy { min-width:0;display:flex;flex-direction:column;gap:4px; }
 .mood-copy strong { font-size:10px;font-weight:600;line-height:1.2; }
 .mood-copy small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;color:hsl(var(--muted-foreground)); }

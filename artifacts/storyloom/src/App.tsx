@@ -6,7 +6,7 @@ import { defaultSettings, useTemplates, type EffectId, type Settings, type Templ
 
 const timeChoices = [{ value: 30, label: '30 sec' }, { value: 60, label: '1 min' }, { value: 120, label: '2 min' }, { value: 180, label: '3 min' }, { value: 300, label: '5 min' }, { value: 0, label: 'Custom' }];
 const iconFor = (kind: MediaItem['kind']) => kind === 'image' ? FileImage : kind === 'video' ? FileVideo2 : FileAudio2;
-const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise' };
+const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise', 'Professional Cut': 'Dynamic pans · tempo-aware transitions' };
 const fmtTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 function App() {
@@ -288,7 +288,7 @@ function App() {
           </div>
           <div className="mood-heading"><div><span className="eyebrow">THE COLOR OF THIS MEMORY</span><h3>Choose a mood</h3></div><span className="mood-selected">{settings.mood}</span></div>
           <div className="mood-list" role="group" aria-label="Film mood">
-            {moods.map((mood, index) => <button key={mood} className={`mood-choice mood-${index} ${settings.mood === mood ? 'selected' : ''}`} onClick={() => setSetting('mood', mood)} aria-pressed={settings.mood === mood}>
+            {moods.map((mood, index) => <button key={mood} className={`mood-choice mood-${index % 9} ${settings.mood === mood ? 'selected' : ''}`} onClick={() => { if (mood === 'Professional Cut') setSettings((current) => ({ ...current, mood, enabledEffects: { colorGrade: false, cameraMove: true, vignette: false, filmGrain: false, glow: false, lightLeak: false, dust: false, letterbox: false }, transitionStyle: 'mood', useMoodTransitionDuration: true })); else setSetting('mood', mood); setActiveTemplate(null); }} aria-pressed={settings.mood === mood}>
               <span className="mood-swatch"><i /><i /><i /></span><span className="mood-copy"><strong>{mood}</strong><small>{moodShort[mood] ?? moodNotes[mood].grade}</small></span>{settings.mood === mood && <span className="mood-check"><Check size={13} /></span>}
             </button>)}
           </div>
@@ -330,6 +330,16 @@ function App() {
             <p className="look-editor-footnote">Saved looks keep these effect and transition choices. Scene timings are specific to the current media and are not included in templates.</p>
           </div>
           <div className="fit-row"><div><strong>Frame your photos</strong><span>Choose whether to preserve the whole image or fill the widescreen frame.</span></div><div className="segmented"><button onClick={() => setSetting('fit', 'fill')} className={settings.fit === 'fill' ? 'active' : ''} aria-pressed={settings.fit === 'fill'}>Fill frame</button><button onClick={() => setSetting('fit', 'fit')} className={settings.fit === 'fit' ? 'active' : ''} aria-pressed={settings.fit === 'fit'}>Show whole photo</button></div></div>
+          <div className="setting-panel overlay-panel">
+            <div className="setting-label"><Sparkles size={15} /><span>CAPTION OVERLAY</span></div>
+            <label className="transition-select-label"><span>Text shown in an elegant lower-third frame</span><input className="field" maxLength={120} placeholder="Add a title or memorable line…" value={settings.overlayText} onChange={(event) => setSetting('overlayText', event.target.value)} /></label>
+            <div className="overlay-fields">
+              <label className="transition-select-label"><span>Start (seconds)</span><input className="field" type="number" min={0} max={Math.max(0, plannedDuration - .5)} value={settings.overlayStart} onChange={(event) => setSetting('overlayStart', Math.max(0, Number(event.target.value)))} /></label>
+              <label className="transition-select-label"><span>Duration (seconds)</span><input className="field" type="number" min={.5} max={Math.max(.5, plannedDuration)} value={settings.overlayDuration} onChange={(event) => setSetting('overlayDuration', Math.max(.5, Number(event.target.value)))} /></label>
+              <label className="custom-range"><span className="custom-range-heading"><span><strong>Overlay opacity</strong></span><b>{settings.overlayOpacity}%</b></span><input aria-label="Overlay opacity" type="range" min={0} max={100} value={settings.overlayOpacity} onChange={(event) => setSetting('overlayOpacity', Number(event.target.value))} /></label>
+            </div>
+            <p className="setting-help">Caption and frame fade in and out automatically. Text is clipped to the lower-third safe area.</p>
+          </div>
 
           <div className="templates-panel">
             <div className="template-title"><Sparkles size={15} /><div><strong>Your saved looks</strong><span>Kept on this device. Media is never part of a template.</span></div></div>

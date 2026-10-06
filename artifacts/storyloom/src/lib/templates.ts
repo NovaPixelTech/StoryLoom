@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
-export type Mood = 'Cinematic' | 'Romantic' | 'Happy & Energetic' | 'Travel Adventure' | 'Nostalgic' | 'Family & Memories' | 'Epic' | 'Minimal & Elegant' | 'Dreamy';
+export type Mood = 'Cinematic' | 'Romantic' | 'Happy & Energetic' | 'Travel Adventure' | 'Nostalgic' | 'Family & Memories' | 'Epic' | 'Minimal & Elegant' | 'Dreamy' | 'Professional Cut';
 export type EffectId = 'colorGrade' | 'cameraMove' | 'vignette' | 'filmGrain' | 'glow' | 'lightLeak' | 'dust' | 'letterbox';
-export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom';
+export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom' | 'slide' | 'spin' | 'glitch' | 'radial-wipe' | 'dip-black' | 'random';
 export type TransitionPreference = 'mood' | 'none' | TransitionStyle;
 export type Settings = {
   duration: number;
@@ -12,6 +12,10 @@ export type Settings = {
   fit: 'fit' | 'fill';
   enabledEffects: Record<EffectId, boolean>;
   effectStrength: number;
+  overlayText: string;
+  overlayStart: number;
+  overlayDuration: number;
+  overlayOpacity: number;
   transitionStyle: TransitionPreference;
   transitionDuration: number;
   useMoodTransitionDuration: boolean;
@@ -28,6 +32,7 @@ const defaultEffects: Record<EffectId, boolean> = {
   dust: true,
   letterbox: true,
 };
+const professionalEffects: Record<EffectId, boolean> = { colorGrade: false, cameraMove: true, vignette: false, filmGrain: false, glow: false, lightLeak: false, dust: false, letterbox: false };
 export const defaultSettings: Settings = {
   duration: 60,
   customDuration: 75,
@@ -36,12 +41,16 @@ export const defaultSettings: Settings = {
   fit: 'fill',
   enabledEffects: defaultEffects,
   effectStrength: 100,
+  overlayText: '',
+  overlayStart: 0,
+  overlayDuration: 8,
+  overlayOpacity: 82,
   transitionStyle: 'mood',
   transitionDuration: .6,
   useMoodTransitionDuration: true,
 };
-const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy'];
-const transitionStyles: TransitionPreference[] = ['mood', 'none', 'crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom'];
+const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy', 'Professional Cut'];
+const transitionStyles: TransitionPreference[] = ['mood', 'none', 'crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom', 'slide', 'spin', 'glitch', 'radial-wipe', 'dip-black', 'random'];
 const effectIds: EffectId[] = ['colorGrade', 'cameraMove', 'vignette', 'filmGrain', 'glow', 'lightLeak', 'dust', 'letterbox'];
 const initial: Template[] = [{ id: 'tpl-cinematic', name: 'After the Rain', settings: defaultSettings, isDefault: true }];
 
@@ -59,8 +68,12 @@ export function normalizeSettings(value: unknown): Settings {
     quality: raw.quality === '720p' || raw.quality === '1080p' ? raw.quality : defaultSettings.quality,
     mood: moods.includes(raw.mood as Mood) ? raw.mood as Mood : defaultSettings.mood,
     fit: raw.fit === 'fit' || raw.fit === 'fill' ? raw.fit : defaultSettings.fit,
-    enabledEffects,
+    enabledEffects: raw.mood === 'Professional Cut' && !raw.enabledEffects ? professionalEffects : enabledEffects,
     effectStrength: clamp(raw.effectStrength, defaultSettings.effectStrength, 0, 100),
+    overlayText: typeof raw.overlayText === 'string' ? raw.overlayText.slice(0, 120) : '',
+    overlayStart: clamp(raw.overlayStart, 0, 0, 600),
+    overlayDuration: clamp(raw.overlayDuration, 8, .5, 600),
+    overlayOpacity: clamp(raw.overlayOpacity, 82, 0, 100),
     transitionStyle,
     transitionDuration: clamp(raw.transitionDuration, defaultSettings.transitionDuration, .15, 2),
     useMoodTransitionDuration: typeof raw.useMoodTransitionDuration === 'boolean' ? raw.useMoodTransitionDuration : defaultSettings.useMoodTransitionDuration,

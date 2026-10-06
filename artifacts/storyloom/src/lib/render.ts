@@ -17,7 +17,7 @@ export type RenderStatus = {
   error?: string;
 };
 
-export const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy'];
+export const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy', 'Professional Cut'];
 type MotionStyle = 'push' | 'pan' | 'float' | 'sweep' | 'still';
 export type MoodEffectProfile = {
   tint: string;
@@ -34,6 +34,7 @@ export type MoodEffectProfile = {
   driftX: number;
   driftY: number;
   motion: MotionStyle;
+  professional?: boolean;
 };
 
 export const moodNotes: Record<Mood, { grade: string; motion: string; transition: string; filter: string; effects: string[] }> = {
@@ -46,6 +47,7 @@ export const moodNotes: Record<Mood, { grade: string; motion: string; transition
   Epic: { grade: 'Deep blacks · bold highlights', motion: 'Broad cinematic sweep', transition: 'Zoom-impact transition', filter: 'contrast(1.24) saturate(.9)', effects: ['Deep contrast grade', 'Monumental sweep', 'Anamorphic matte', 'Zoom-impact transition', 'Edge vignette'] },
   'Minimal & Elegant': { grade: 'Quiet color · clean detail', motion: 'Almost-still, precise', transition: 'Measured fade', filter: 'saturate(.72) contrast(1.04)', effects: ['Muted color palette', 'Precision push-in', 'Quiet vignette', 'Measured soft fade'] },
   Dreamy: { grade: 'Hazy light · softened color', motion: 'Floating drift', transition: 'Luminous bloom dissolve', filter: 'saturate(.86) brightness(1.06) blur(.15px)', effects: ['Pastel diffusion', 'Luminous highlight bloom', 'Floating camera drift', 'Flowing light leak'] },
+  'Professional Cut': { grade: 'Natural color · crisp detail', motion: 'Dynamic horizontal, vertical & diagonal pans', transition: 'Tempo-aware random transitions', filter: 'none', effects: ['Dynamic camera movement', 'Tempo-aware transitions'] },
 };
 
 export const moodEffects: Record<Mood, MoodEffectProfile> = {
@@ -58,6 +60,7 @@ export const moodEffects: Record<Mood, MoodEffectProfile> = {
   Epic: { tint: '218,181,129', tintAmount: .026, vignette: .43, grain: .024, glow: .11, lightLeak: .035, dust: 0, letterbox: .052, transition: 'zoom-impact', transitionSeconds: .38, zoom: .078, driftX: .052, driftY: .008, motion: 'sweep' },
   'Minimal & Elegant': { tint: '221,229,240', tintAmount: .01, vignette: .14, grain: 0, glow: .025, lightLeak: 0, dust: 0, letterbox: 0, transition: 'soft-fade', transitionSeconds: .42, zoom: .012, driftX: .002, driftY: .001, motion: 'push' },
   Dreamy: { tint: '195,185,246', tintAmount: .06, vignette: .25, grain: .018, glow: .23, lightLeak: .115, dust: .1, letterbox: .018, transition: 'bloom', transitionSeconds: .78, zoom: .026, driftX: .015, driftY: .01, motion: 'float' },
+  'Professional Cut': { tint: '255,255,255', tintAmount: 0, vignette: 0, grain: 0, glow: 0, lightLeak: 0, dust: 0, letterbox: 0, transition: 'random', transitionSeconds: .55, zoom: 0, driftX: .055, driftY: .045, motion: 'pan', professional: true },
 };
 
 export const effectOptions: { id: EffectId; label: string; detail: string }[] = [
@@ -82,6 +85,12 @@ export const transitionOptions: { value: TransitionPreference; label: string }[]
   { value: 'zoom-impact', label: 'Zoom impact' },
   { value: 'soft-fade', label: 'Soft fade' },
   { value: 'bloom', label: 'Luminous bloom' },
+  { value: 'slide', label: 'Motion slide' },
+  { value: 'spin', label: 'Whip spin' },
+  { value: 'glitch', label: 'Digital glitch' },
+  { value: 'radial-wipe', label: 'Radial reveal' },
+  { value: 'dip-black', label: 'Dip to black' },
+  { value: 'random', label: 'Random · tempo-aware' },
 ];
 
 export function resolveMoodLook(settings: Settings): { profile: MoodEffectProfile; filter: string } {
@@ -89,21 +98,22 @@ export function resolveMoodLook(settings: Settings): { profile: MoodEffectProfil
   const enabled = settings.enabledEffects;
   const strength = Math.min(1, Math.max(0, settings.effectStrength / 100));
   const transition = settings.transitionStyle === 'mood' ? base.transition : settings.transitionStyle;
+  const professional = settings.mood === 'Professional Cut';
   return {
     filter: enabled.colorGrade ? moodNotes[settings.mood].filter : 'none',
     profile: {
       ...base,
-      tintAmount: enabled.colorGrade ? base.tintAmount * strength : 0,
-      vignette: enabled.vignette ? base.vignette * strength : 0,
-      grain: enabled.filmGrain ? base.grain * strength : 0,
-      glow: enabled.glow ? base.glow * strength : 0,
-      lightLeak: enabled.lightLeak ? base.lightLeak * strength : 0,
-      dust: enabled.dust ? base.dust * strength : 0,
-      letterbox: enabled.letterbox ? base.letterbox * strength : 0,
+      tintAmount: !professional && enabled.colorGrade ? base.tintAmount * strength : 0,
+      vignette: !professional && enabled.vignette ? base.vignette * strength : 0,
+      grain: !professional && enabled.filmGrain ? base.grain * strength : 0,
+      glow: !professional && enabled.glow ? base.glow * strength : 0,
+      lightLeak: !professional && enabled.lightLeak ? base.lightLeak * strength : 0,
+      dust: !professional && enabled.dust ? base.dust * strength : 0,
+      letterbox: !professional && enabled.letterbox ? base.letterbox * strength : 0,
       zoom: enabled.cameraMove ? base.zoom * strength : 0,
       driftX: enabled.cameraMove ? base.driftX * strength : 0,
       driftY: enabled.cameraMove ? base.driftY * strength : 0,
-      motion: enabled.cameraMove && strength > 0 ? base.motion : 'still',
+      motion: enabled.cameraMove && (professional || strength > 0) ? base.motion : 'still',
       transition,
       transitionSeconds: settings.useMoodTransitionDuration ? base.transitionSeconds : settings.transitionDuration,
     },
@@ -262,8 +272,9 @@ function createAudioRig(stream: MediaStream, media: MediaItem[]): AudioRig | nul
         scheduleNext(0);
       },
       updateMix(hasVideoScene, elapsed, total) {
-        const endFade = Math.min(1, Math.max(0, (total - elapsed) / 1.6));
-        musicGain.gain.value = (hasVideoScene ? .31 : .62) * endFade;
+        const fadeIn = Math.min(1, Math.max(0, elapsed / .9));
+        const endFade = Math.min(1, Math.max(0, (total - elapsed) / 1.2));
+        musicGain.gain.value = (hasVideoScene ? .31 : .62) * fadeIn * endFade;
       },
       cleanup() {
         timers.forEach((timer) => window.clearTimeout(timer));
@@ -343,7 +354,7 @@ function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasEleme
   const p = Math.max(0, Math.min(1, progress));
   if (look.transition === 'none') return;
   ctx.save();
-  if (look.transition === 'wipe') {
+  if (look.transition === 'wipe' || look.transition === 'slide') {
     ctx.beginPath();
     ctx.rect(p * width, 0, width * (1 - p), height);
     ctx.clip();
@@ -352,11 +363,12 @@ function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasEleme
     const alpha = Math.pow(1 - p, 2) * .32 + Math.sin(p * Math.PI) * .08;
     ctx.fillStyle = `rgba(255,248,231,${alpha})`;
     ctx.fillRect(0, 0, width, height);
-  } else if (look.transition === 'zoom-impact') {
+  } else if (look.transition === 'zoom-impact' || look.transition === 'spin') {
     const scale = 1 + p * .12;
     ctx.globalAlpha = 1 - p;
     ctx.translate(width / 2, height / 2);
     ctx.scale(scale, scale);
+    if (look.transition === 'spin') ctx.rotate((1 - p) * Math.PI / 12);
     ctx.drawImage(outgoing, -width / 2, -height / 2, width, height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
@@ -367,7 +379,7 @@ function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasEleme
     }
   } else {
     ctx.globalAlpha = 1 - p;
-    if (look.transition === 'bloom') ctx.filter = `blur(${(1 - p) * Math.min(width, height) * .018}px)`;
+    if (look.transition === 'bloom' || look.transition === 'crossfade' || look.transition === 'soft-fade') ctx.filter = `blur(${(1 - p) * Math.min(width, height) * .018}px)`;
     ctx.drawImage(outgoing, 0, 0);
     ctx.filter = 'none';
     ctx.globalAlpha = 1;
@@ -402,6 +414,16 @@ function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasEleme
       bloom.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = bloom;
       ctx.fillRect(0, 0, width, height);
+    } else if (look.transition === 'dip-black') {
+      ctx.fillStyle = `rgba(0,0,0,${Math.sin(p * Math.PI)})`;
+      ctx.fillRect(0, 0, width, height);
+    } else if (look.transition === 'glitch') {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(255,40,100,${Math.sin(p * 20) ** 2 * .15})`;
+      ctx.fillRect((p * 137 % 1) * width, 0, width * .18, height);
+    } else if (look.transition === 'radial-wipe') {
+      ctx.beginPath(); ctx.arc(width / 2, height / 2, (1 - p) * Math.hypot(width, height) * .72, 0, Math.PI * 2); ctx.clip();
+      ctx.globalAlpha = 1; ctx.drawImage(outgoing, 0, 0);
     }
   }
   ctx.restore();
@@ -542,7 +564,13 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         if (audioRig?.attachVideo(video)) video.muted = false;
         image = video;
       }
-      const { profile: look, filter } = resolveMoodLook(settings);
+      const { profile: baseLook, filter } = resolveMoodLook(settings);
+      const transitionChoices: TransitionStyle[] = ['crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom', 'slide', 'spin', 'glitch', 'radial-wipe', 'dip-black'];
+      const transitionSeed = seededNoise(index + 17) * transitionChoices.length;
+      const randomTransition = baseLook.transition === 'random';
+      const look: MoodEffectProfile = randomTransition
+        ? { ...baseLook, transition: transitionChoices[Math.floor(transitionSeed) % transitionChoices.length], transitionSeconds: Math.min(baseLook.transitionSeconds, Math.max(.35, scene.duration * .24)) }
+        : baseLook;
       const sceneStart = performance.now();
       const durationMs = scene.duration * 1000;
       const fade = look.transition === 'none' ? 0 : Math.min(look.transitionSeconds, scene.duration * .4) * 1000;
@@ -560,8 +588,9 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         const breathing = look.motion === 'float' ? Math.sin(moodProgress) * .009 : 0;
         const zoom = 1 + look.zoom * progress + breathing;
         const driftProgress = look.motion === 'pan' || look.motion === 'sweep' ? progress - .5 : Math.sin(moodProgress / 2);
-        const driftX = driftProgress * width * look.driftX;
-        const driftY = Math.sin(moodProgress / 2) * height * look.driftY;
+        const panDirection = Math.floor(seededNoise(index + 41) * 8);
+        const driftX = (panDirection % 2 ? driftProgress : Math.sin(moodProgress / 2)) * width * look.driftX;
+        const driftY = (panDirection % 3 ? Math.sin(moodProgress / 2) : driftProgress) * height * look.driftY;
         ctx.save();
         ctx.translate(width / 2 + driftX, height / 2 + driftY);
         ctx.scale(zoom, zoom);
@@ -574,12 +603,37 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
           snapshotCaptured = true;
         }
         if (index > 0 && outgoingContext && fade > 0 && elapsed < fade) {
-          drawTransition(ctx, outgoingCanvas, look, elapsed / fade, width, height);
+          const compositedLook = randomTransition && elapsed < fade * .55 && seededNoise(index + 80) > .68 && look.transition !== 'none'
+            ? { ...look, transition: transitionChoices[(transitionChoices.indexOf(look.transition) + 1) % transitionChoices.length] }
+            : look;
+          drawTransition(ctx, outgoingCanvas, compositedLook, elapsed / fade, width, height);
         }
         drawMoodLook(ctx, width, height, look, elapsed / 1000, index);
-        if (index === scenes.length - 1 && fade > 0 && durationMs - elapsed < fade) {
-          const progress = Math.max(0, 1 - (durationMs - elapsed) / fade);
-          ctx.fillStyle = `rgba(14,16,22,${progress * (settings.mood === 'Epic' ? .75 : .45)})`;
+        if (settings.overlayText && scene.start + elapsed / 1000 >= settings.overlayStart && scene.start + elapsed / 1000 <= settings.overlayStart + settings.overlayDuration) {
+          const localTime = scene.start + elapsed / 1000 - settings.overlayStart;
+          const fadeInText = Math.min(1, localTime / .55);
+          const fadeOutText = Math.min(1, (settings.overlayDuration - localTime) / .55);
+          const alpha = Math.max(0, Math.min(fadeInText, fadeOutText)) * settings.overlayOpacity / 100;
+          const panelHeight = height * .105;
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = `rgba(10,12,18,${.72 * settings.overlayOpacity / 100})`;
+          ctx.beginPath(); ctx.roundRect(width * .1, height * .81, width * .8, panelHeight, height * .018); ctx.fill();
+          ctx.fillStyle = '#fffaf1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.font = `600 ${Math.round(height * .043)}px Georgia, serif`;
+          ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = height * .008;
+          ctx.fillText(settings.overlayText, width / 2, height * .862, width * .74);
+          ctx.restore();
+        }
+        const openingFade = index === 0 ? Math.min(1.1, durationMs * .18) : 0;
+        const endingFade = index === scenes.length - 1 ? Math.min(1.1, durationMs * .18) : 0;
+        if (openingFade > elapsed) {
+          ctx.fillStyle = `rgba(0,0,0,${1 - elapsed / openingFade})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+        if (endingFade > 0 && durationMs - elapsed < endingFade) {
+          const progress = Math.max(0, 1 - (durationMs - elapsed) / endingFade);
+          ctx.fillStyle = `rgba(0,0,0,${progress})`;
           ctx.fillRect(0, 0, width, height);
         }
         onStatus({ stage: `Applying effects and encoding scene ${index + 1} of ${scenes.length}`, elapsed: (performance.now() - startedAt) / 1000 });
