@@ -4,11 +4,13 @@ Storyloom turns selected photos, video clips, and local soundtrack files into a 
 
 ## Run and check
 
-The Replit web workflow supplies the `PORT` and `BASE_PATH` values required by Vite. Start or restart the managed **Storyloom: web** workflow to run the app.
+Install dependencies with pnpm, then start the local development server or build the static site:
 
 ```sh
+pnpm install
+pnpm --filter @workspace/storyloom run dev
 pnpm --filter @workspace/storyloom run typecheck
-PORT=5000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/storyloom run build
+pnpm build:pages
 ```
 
 The app does not require the shared API server, a database, or external API credentials.
