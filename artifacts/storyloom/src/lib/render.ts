@@ -316,10 +316,23 @@ async function validateRecording(blob: Blob, targetDuration: number, width: numb
           reject(new Error('The browser could not read the finished video dimensions.'));
           return;
         }
-        const duration = Number.isFinite(video.duration) ? video.duration : null;
-        if (duration !== null && Math.abs(duration - targetDuration) > Math.max(2, targetDuration * .03)) {
-          reject(new Error(`The finished video is ${duration.toFixed(1)} seconds long, outside the expected ${targetDuration} second duration.`));
+        const raw = Number.isFinite(video.duration) ? video.duration : null;
+        const truncated = raw !== null && raw < targetDuration - Math.max(2, targetDuration * .04);
+        if (truncated) {
+          reject(new Error(`The finished video is only ${raw.toFixed(1)} seconds long, shorter than the expected ${targetDuration} seconds. The recording was interrupted, so it was not marked as ready.`));
           return;
+        }
+        let duration = raw !== null && raw <= Math.max(1, targetDuration * 8) ? raw : null;
+        if (duration === null) {
+          try {
+            const ranges = video.seekable;
+            if (ranges.length > 0) {
+              const seekEnd = ranges.end(ranges.length - 1);
+              if (seekEnd > 0 && seekEnd < (raw ?? Number.POSITIVE_INFINITY) * .5) duration = seekEnd;
+            }
+          } catch {
+            duration = null;
+          }
         }
         resolve({ duration, width: video.videoWidth, height: video.videoHeight });
       };
