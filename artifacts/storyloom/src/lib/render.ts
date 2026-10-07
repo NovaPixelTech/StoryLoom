@@ -47,7 +47,7 @@ export const moodNotes: Record<Mood, { grade: string; motion: string; transition
   Epic: { grade: 'Deep blacks · bold highlights', motion: 'Broad cinematic sweep', transition: 'Zoom-impact transition', filter: 'contrast(1.24) saturate(.9)', effects: ['Deep contrast grade', 'Monumental sweep', 'Anamorphic matte', 'Zoom-impact transition', 'Edge vignette'] },
   'Minimal & Elegant': { grade: 'Quiet color · clean detail', motion: 'Almost-still, precise', transition: 'Measured fade', filter: 'saturate(.72) contrast(1.04)', effects: ['Muted color palette', 'Precision push-in', 'Quiet vignette', 'Measured soft fade'] },
   Dreamy: { grade: 'Hazy light · softened color', motion: 'Floating drift', transition: 'Luminous bloom dissolve', filter: 'saturate(.86) brightness(1.06) blur(.15px)', effects: ['Pastel diffusion', 'Luminous highlight bloom', 'Floating camera drift', 'Flowing light leak'] },
-  'Professional Cut': { grade: 'Natural color · crisp detail', motion: 'Dynamic horizontal, vertical & diagonal pans', transition: 'Tempo-aware random transitions', filter: 'none', effects: ['Dynamic camera movement', 'Tempo-aware transitions'] },
+  'Professional Cut': { grade: 'Natural color · crisp detail', motion: 'Dynamic horizontal, vertical & diagonal pans', transition: 'Beat-synced random transitions', filter: 'none', effects: ['Dynamic camera movement', 'Beat-synced combined transitions'] },
 };
 
 export const moodEffects: Record<Mood, MoodEffectProfile> = {
@@ -79,18 +79,25 @@ export const transitionOptions: { value: TransitionPreference; label: string }[]
   { value: 'none', label: 'No transition' },
   { value: 'crossfade', label: 'Cross-dissolve' },
   { value: 'wipe', label: 'Directional wipe' },
+  { value: 'luma-wipe', label: 'Soft luma wipe' },
   { value: 'light-leak', label: 'Light-leak dissolve' },
   { value: 'film-burn', label: 'Film burn' },
   { value: 'flash-cut', label: 'Soft flash cut' },
   { value: 'zoom-impact', label: 'Zoom impact' },
+  { value: 'zoom-blur', label: 'Zoom blur' },
   { value: 'soft-fade', label: 'Soft fade' },
+  { value: 'fade-into', label: 'Fade into next' },
   { value: 'bloom', label: 'Luminous bloom' },
   { value: 'slide', label: 'Motion slide' },
+  { value: 'whip-pan', label: 'Whip pan' },
   { value: 'spin', label: 'Whip spin' },
+  { value: 'flip', label: 'Card flip' },
   { value: 'glitch', label: 'Digital glitch' },
   { value: 'radial-wipe', label: 'Radial reveal' },
+  { value: 'light-sweep', label: 'Light sweep' },
+  { value: 'blur-dissolve', label: 'Blur dissolve' },
   { value: 'dip-black', label: 'Dip to black' },
-  { value: 'random', label: 'Random · tempo-aware' },
+  { value: 'random', label: 'Random · beat-synced' },
 ];
 
 export function resolveMoodLook(settings: Settings): { profile: MoodEffectProfile; filter: string } {
@@ -163,7 +170,7 @@ type AudioRig = {
   timers: number[];
   attachVideo(video: HTMLVideoElement): boolean;
   startMusic(): Promise<void>;
-  updateMix(hasVideo: boolean, elapsed: number, total: number): void;
+  updateMix(hasVideo: boolean, elapsed: number, total: number, fadeInSeconds: number, fadeOutSeconds: number): void;
   cleanup(): void;
 };
 
@@ -271,9 +278,9 @@ function createAudioRig(stream: MediaStream, media: MediaItem[]): AudioRig | nul
         };
         scheduleNext(0);
       },
-      updateMix(hasVideoScene, elapsed, total) {
-        const fadeIn = Math.min(1, Math.max(0, elapsed / .9));
-        const endFade = Math.min(1, Math.max(0, (total - elapsed) / 1.2));
+      updateMix(hasVideoScene, elapsed, total, fadeInSeconds, fadeOutSeconds) {
+        const fadeIn = fadeInSeconds > 0 ? Math.min(1, Math.max(0, elapsed / fadeInSeconds)) : 1;
+        const endFade = fadeOutSeconds > 0 ? Math.min(1, Math.max(0, (total - elapsed) / fadeOutSeconds)) : 1;
         musicGain.gain.value = (hasVideoScene ? .31 : .62) * fadeIn * endFade;
       },
       cleanup() {
@@ -350,83 +357,285 @@ function seededNoise(seed: number) {
   return value - Math.floor(value);
 }
 
-function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasElement, look: MoodEffectProfile, progress: number, width: number, height: number) {
-  const p = Math.max(0, Math.min(1, progress));
-  if (look.transition === 'none') return;
+const PAN_DIRECTIONS: [number, number][] = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [.7071, .7071], [-.7071, .7071], [.7071, -.7071], [-.7071, -.7071],
+];
+
+const moodTempoBpm: Record<Mood, number> = {
+  Cinematic: 96,
+  Romantic: 84,
+  'Happy & Energetic': 124,
+  'Travel Adventure': 116,
+  Nostalgic: 76,
+  'Family & Memories': 90,
+  Epic: 100,
+  'Minimal & Elegant': 88,
+  Dreamy: 72,
+  'Professional Cut': 110,
+};
+
+const transitionChoices: TransitionStyle[] = [
+  'crossfade', 'wipe', 'luma-wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'zoom-blur',
+  'soft-fade', 'fade-into', 'bloom', 'slide', 'whip-pan', 'spin', 'flip', 'glitch', 'radial-wipe',
+  'light-sweep', 'blur-dissolve',
+];
+
+const combinedChoices: TransitionStyle[] = ['light-leak', 'film-burn', 'bloom', 'light-sweep', 'glitch', 'zoom-blur'];
+
+async function estimateMusicTempo(context: AudioContext, url: string): Promise<{ beat: number; offset: number } | null> {
+  try {
+    const decode = async () => {
+      const response = await fetch(url);
+      const data = await response.arrayBuffer();
+      return context.decodeAudioData(data);
+    };
+    const timeout = new Promise<AudioBuffer | null>((resolve) => window.setTimeout(() => resolve(null), 9000));
+    const buffer = await Promise.race([decode().catch(() => null), timeout]);
+    if (!buffer) return null;
+    const samples = buffer.getChannelData(0);
+    const hop = 512;
+    const windows = Math.floor(samples.length / hop);
+    if (windows < 96) return null;
+    const energy = new Float32Array(windows);
+    for (let i = 0; i < windows; i += 1) {
+      let sum = 0;
+      const start = i * hop;
+      for (let j = 0; j < hop; j += 4) {
+        const value = samples[start + j];
+        sum += value * value;
+      }
+      energy[i] = Math.sqrt(sum / (hop / 4));
+    }
+    const onset = new Float32Array(windows);
+    for (let i = 1; i < windows; i += 1) {
+      const diff = energy[i] - energy[i - 1];
+      onset[i] = diff > 0 ? diff : 0;
+    }
+    const windowsPerSecond = buffer.sampleRate / hop;
+    let bestBpm = 0;
+    let bestScore = -1;
+    for (let bpm = 64; bpm <= 176; bpm += .5) {
+      const lag = Math.round(windowsPerSecond * 60 / bpm);
+      if (lag < 4 || lag * 2 >= windows) continue;
+      let score = 0;
+      for (let i = 0; i + lag < windows; i += 1) score += onset[i] * onset[i + lag];
+      score /= (windows - lag);
+      score *= Math.exp(-.5 * ((bpm - 112) / 58) ** 2);
+      if (score > bestScore) { bestScore = score; bestBpm = bpm; }
+    }
+    if (!bestBpm) return null;
+    const lag = Math.round(windowsPerSecond * 60 / bestBpm);
+    let bestPhase = 0;
+    let bestPhaseScore = -1;
+    for (let phase = 0; phase < lag; phase += 1) {
+      let score = 0;
+      for (let i = phase; i < windows; i += lag) score += onset[i];
+      if (score > bestPhaseScore) { bestPhaseScore = score; bestPhase = phase; }
+    }
+    return { beat: 60 / bestBpm, offset: bestPhase / windowsPerSecond };
+  } catch {
+    return null;
+  }
+}
+
+type TransitionLayer = { alpha: number; scale: number; scaleX: number; rotate: number; tx: number; blur: number; clip: 'wipe' | 'radial' | 'luma' | null; ghosts: number };
+
+function transitionLayer(style: TransitionStyle, p: number, width: number, height: number): TransitionLayer {
+  const layer: TransitionLayer = { alpha: 1, scale: 1, scaleX: 1, rotate: 0, tx: 0, blur: 0, clip: null, ghosts: 0 };
+  const soft = Math.min(width, height);
+  switch (style) {
+    case 'crossfade': layer.alpha = 1 - p; break;
+    case 'soft-fade': layer.alpha = 1 - p; layer.blur = (1 - p) * soft * .018; break;
+    case 'bloom': layer.alpha = 1 - p; layer.blur = (1 - p) * soft * .018; break;
+    case 'blur-dissolve': layer.alpha = 1 - p; layer.blur = p * soft * .05; layer.scale = 1 + p * .05; break;
+    case 'fade-into': { const eased = p * p * (3 - 2 * p); layer.alpha = 1 - eased; layer.scale = 1 + p * .05; break; }
+    case 'light-leak': case 'film-burn': case 'light-sweep': case 'glitch': case 'dip-black': layer.alpha = 1 - p; break;
+    case 'flash-cut': layer.alpha = 0; break;
+    case 'zoom-impact': layer.alpha = 1 - p; layer.scale = 1 + p * .14; break;
+    case 'zoom-blur': layer.alpha = 1 - p; layer.scale = 1 + p * .3; layer.blur = p * soft * .02; layer.ghosts = 3; break;
+    case 'spin': layer.alpha = 1 - p; layer.scale = 1 + p * .12; layer.rotate = (1 - p) * Math.PI / 12; break;
+    case 'slide': layer.tx = p * width; layer.alpha = 1 - Math.max(0, (p - .7) / .3) * .3; break;
+    case 'whip-pan': layer.tx = p * p * width; layer.alpha = 1 - Math.max(0, (p - .55) / .45); layer.blur = p * soft * .03; break;
+    case 'flip': layer.scaleX = Math.max(.002, Math.cos(p * Math.PI / 2)); break;
+    case 'wipe': layer.clip = 'wipe'; break;
+    case 'luma-wipe': layer.clip = 'luma'; break;
+    case 'radial-wipe': layer.clip = 'radial'; break;
+    default: layer.alpha = 1 - p;
+  }
+  return layer;
+}
+
+function drawTransitionFx(ctx: CanvasRenderingContext2D, style: TransitionStyle, p: number, look: MoodEffectProfile, width: number, height: number) {
+  const wave = Math.sin(p * Math.PI);
   ctx.save();
-  if (look.transition === 'wipe' || look.transition === 'slide') {
-    ctx.beginPath();
-    ctx.rect(p * width, 0, width * (1 - p), height);
-    ctx.clip();
-    ctx.drawImage(outgoing, 0, 0);
-  } else if (look.transition === 'flash-cut') {
-    const alpha = Math.pow(1 - p, 2) * .32 + Math.sin(p * Math.PI) * .08;
+  if (style === 'light-leak') {
+    ctx.globalCompositeOperation = 'screen';
+    const centerX = width * (.12 + .76 * p);
+    const flare = ctx.createLinearGradient(centerX - width * .24, 0, centerX + width * .24, height);
+    flare.addColorStop(0, 'rgba(255,170,120,0)');
+    flare.addColorStop(.38, `rgba(${look.tint},${wave * .17})`);
+    flare.addColorStop(.52, `rgba(255,239,222,${wave * .32})`);
+    flare.addColorStop(.68, `rgba(${look.tint},${wave * .12})`);
+    flare.addColorStop(1, 'rgba(255,170,120,0)');
+    ctx.fillStyle = flare;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'film-burn') {
+    ctx.globalCompositeOperation = 'screen';
+    const centerX = width * (p * 1.18 - .08);
+    const burn = ctx.createLinearGradient(centerX - width * .21, 0, centerX + width * .21, height);
+    burn.addColorStop(0, 'rgba(95,25,11,0)');
+    burn.addColorStop(.32, `rgba(227,75,23,${wave * .22})`);
+    burn.addColorStop(.49, `rgba(255,223,155,${wave * .38})`);
+    burn.addColorStop(.63, `rgba(255,116,34,${wave * .2})`);
+    burn.addColorStop(1, 'rgba(95,25,11,0)');
+    ctx.fillStyle = burn;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'bloom') {
+    ctx.globalCompositeOperation = 'screen';
+    const bloom = ctx.createRadialGradient(width * .52, height * .45, 0, width * .52, height * .45, width * .7);
+    bloom.addColorStop(0, `rgba(239,224,255,${wave * .24})`);
+    bloom.addColorStop(.6, `rgba(${look.tint},${wave * .1})`);
+    bloom.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = bloom;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'flash-cut') {
+    const alpha = Math.pow(1 - p, 2) * .32 + wave * .08;
     ctx.fillStyle = `rgba(255,248,231,${alpha})`;
     ctx.fillRect(0, 0, width, height);
-  } else if (look.transition === 'zoom-impact' || look.transition === 'spin') {
-    const scale = 1 + p * .12;
-    ctx.globalAlpha = 1 - p;
-    ctx.translate(width / 2, height / 2);
-    ctx.scale(scale, scale);
-    if (look.transition === 'spin') ctx.rotate((1 - p) * Math.PI / 12);
-    ctx.drawImage(outgoing, -width / 2, -height / 2, width, height);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-    const flash = Math.sin(p * Math.PI) ** 2 * .13;
+  } else if (style === 'zoom-impact' || style === 'spin') {
+    const flash = wave ** 2 * .13;
     if (flash > .005) {
       ctx.fillStyle = `rgba(255,242,218,${flash})`;
       ctx.fillRect(0, 0, width, height);
     }
-  } else {
-    ctx.globalAlpha = 1 - p;
-    if (look.transition === 'bloom' || look.transition === 'crossfade' || look.transition === 'soft-fade') ctx.filter = `blur(${(1 - p) * Math.min(width, height) * .018}px)`;
-    ctx.drawImage(outgoing, 0, 0);
-    ctx.filter = 'none';
-    ctx.globalAlpha = 1;
-
-    if (look.transition === 'light-leak') {
-      ctx.globalCompositeOperation = 'screen';
-      const centerX = width * (.12 + .76 * p);
-      const flare = ctx.createLinearGradient(centerX - width * .24, 0, centerX + width * .24, height);
-      flare.addColorStop(0, 'rgba(255,170,120,0)');
-      flare.addColorStop(.38, `rgba(${look.tint},${Math.sin(p * Math.PI) * .17})`);
-      flare.addColorStop(.52, `rgba(255,239,222,${Math.sin(p * Math.PI) * .32})`);
-      flare.addColorStop(.68, `rgba(${look.tint},${Math.sin(p * Math.PI) * .12})`);
-      flare.addColorStop(1, 'rgba(255,170,120,0)');
-      ctx.fillStyle = flare;
-      ctx.fillRect(0, 0, width, height);
-    } else if (look.transition === 'film-burn') {
-      ctx.globalCompositeOperation = 'screen';
-      const centerX = width * (p * 1.18 - .08);
-      const burn = ctx.createLinearGradient(centerX - width * .21, 0, centerX + width * .21, height);
-      burn.addColorStop(0, 'rgba(95,25,11,0)');
-      burn.addColorStop(.32, `rgba(227,75,23,${Math.sin(p * Math.PI) * .22})`);
-      burn.addColorStop(.49, `rgba(255,223,155,${Math.sin(p * Math.PI) * .38})`);
-      burn.addColorStop(.63, `rgba(255,116,34,${Math.sin(p * Math.PI) * .2})`);
-      burn.addColorStop(1, 'rgba(95,25,11,0)');
-      ctx.fillStyle = burn;
-      ctx.fillRect(0, 0, width, height);
-    } else if (look.transition === 'bloom') {
-      ctx.globalCompositeOperation = 'screen';
-      const bloom = ctx.createRadialGradient(width * .52, height * .45, 0, width * .52, height * .45, width * .7);
-      bloom.addColorStop(0, `rgba(239,224,255,${Math.sin(p * Math.PI) * .24})`);
-      bloom.addColorStop(.6, `rgba(${look.tint},${Math.sin(p * Math.PI) * .1})`);
-      bloom.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = bloom;
-      ctx.fillRect(0, 0, width, height);
-    } else if (look.transition === 'dip-black') {
-      ctx.fillStyle = `rgba(0,0,0,${Math.sin(p * Math.PI)})`;
-      ctx.fillRect(0, 0, width, height);
-    } else if (look.transition === 'glitch') {
-      ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = `rgba(255,40,100,${Math.sin(p * 20) ** 2 * .15})`;
-      ctx.fillRect((p * 137 % 1) * width, 0, width * .18, height);
-    } else if (look.transition === 'radial-wipe') {
-      ctx.beginPath(); ctx.arc(width / 2, height / 2, (1 - p) * Math.hypot(width, height) * .72, 0, Math.PI * 2); ctx.clip();
-      ctx.globalAlpha = 1; ctx.drawImage(outgoing, 0, 0);
-    }
+  } else if (style === 'zoom-blur') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,250,240,${wave * .12})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'dip-black') {
+    ctx.fillStyle = `rgba(0,0,0,${wave})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'glitch') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,40,100,${Math.sin(p * 20) ** 2 * .15})`;
+    ctx.fillRect((p * 137 % 1) * width, 0, width * .18, height);
+    ctx.fillStyle = `rgba(40,240,255,${Math.cos(p * 17) ** 2 * .12})`;
+    ctx.fillRect((p * 71 % 1) * width, height * ((p * 3.3) % 1), width * .26, height * .07);
+  } else if (style === 'light-sweep') {
+    ctx.globalCompositeOperation = 'screen';
+    const centerX = width * (-.2 + 1.4 * p);
+    const sweep = ctx.createLinearGradient(centerX - width * .3, 0, centerX + width * .3, 0);
+    sweep.addColorStop(0, 'rgba(255,255,255,0)');
+    sweep.addColorStop(.46, `rgba(255,244,224,${wave * .18})`);
+    sweep.addColorStop(.5, `rgba(255,255,255,${wave * .42})`);
+    sweep.addColorStop(.54, `rgba(255,244,224,${wave * .18})`);
+    sweep.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sweep;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'fade-into') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,250,242,${wave * .07})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'blur-dissolve') {
+    ctx.globalCompositeOperation = 'screen';
+    const haze = ctx.createRadialGradient(width * .5, height * .5, 0, width * .5, height * .5, width * .72);
+    haze.addColorStop(0, `rgba(236,240,255,${wave * .16})`);
+    haze.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, width, height);
+  } else if (style === 'whip-pan') {
+    ctx.globalCompositeOperation = 'screen';
+    const streak = ctx.createLinearGradient(0, 0, width, 0);
+    streak.addColorStop(0, 'rgba(255,255,255,0)');
+    streak.addColorStop(p, `rgba(255,250,238,${wave * .22})`);
+    streak.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = streak;
+    ctx.fillRect(0, height * .2, width, height * .6);
+  } else if (style === 'flip') {
+    ctx.globalCompositeOperation = 'screen';
+    const edgeX = width / 2;
+    const edge = ctx.createLinearGradient(edgeX - width * .06, 0, edgeX + width * .06, 0);
+    edge.addColorStop(0, 'rgba(255,255,255,0)');
+    edge.addColorStop(.5, `rgba(255,246,226,${wave * .3})`);
+    edge.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = edge;
+    ctx.fillRect(edgeX - width * .06, 0, width * .12, height);
+  } else if (style === 'luma-wipe') {
+    ctx.globalCompositeOperation = 'screen';
+    const feather = Math.max(28, width * .07);
+    const edgeX = p * (width + feather) - feather / 2;
+    const edge = ctx.createLinearGradient(edgeX - feather, 0, edgeX + feather, 0);
+    edge.addColorStop(0, 'rgba(255,255,255,0)');
+    edge.addColorStop(.5, `rgba(255,248,234,${wave * .2})`);
+    edge.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = edge;
+    ctx.fillRect(edgeX - feather, 0, feather * 2, height);
   }
   ctx.restore();
+}
+
+function drawTransition(ctx: CanvasRenderingContext2D, outgoing: HTMLCanvasElement, look: MoodEffectProfile, progress: number, width: number, height: number, scratch: HTMLCanvasElement | null, secondary?: TransitionStyle | null) {
+  const p = Math.max(0, Math.min(1, progress));
+  const primary = look.transition;
+  if (primary === 'none' || primary === 'random') return;
+  const styles: TransitionStyle[] = [primary];
+  if (secondary && secondary !== 'random' && secondary !== primary) styles.push(secondary);
+  const clips: ('wipe' | 'radial' | 'luma')[] = [];
+  const merged: TransitionLayer = { alpha: 1, scale: 1, scaleX: 1, rotate: 0, tx: 0, blur: 0, clip: null, ghosts: 0 };
+  for (const style of styles) {
+    const layer = transitionLayer(style, p, width, height);
+    merged.alpha *= layer.alpha;
+    merged.scale *= layer.scale;
+    merged.scaleX *= layer.scaleX;
+    merged.rotate += layer.rotate;
+    merged.tx += layer.tx;
+    merged.blur = Math.max(merged.blur, layer.blur);
+    merged.ghosts = Math.max(merged.ghosts, layer.ghosts);
+    if (layer.clip && !clips.includes(layer.clip)) clips.push(layer.clip);
+  }
+  ctx.save();
+  let source: CanvasImageSource = outgoing;
+  const scratchContext = clips.includes('luma') ? scratch?.getContext('2d') : null;
+  if (scratch && scratchContext) {
+    scratchContext.clearRect(0, 0, width, height);
+    scratchContext.globalCompositeOperation = 'source-over';
+    scratchContext.drawImage(outgoing, 0, 0);
+    scratchContext.globalCompositeOperation = 'destination-out';
+    const feather = Math.max(28, width * .07);
+    const edge = p * (width + feather);
+    const gradient = scratchContext.createLinearGradient(edge - feather, 0, edge, 0);
+    gradient.addColorStop(0, 'rgba(0,0,0,1)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    scratchContext.fillStyle = gradient;
+    scratchContext.fillRect(0, 0, width, height);
+    scratchContext.globalCompositeOperation = 'source-over';
+    source = scratch;
+  }
+  for (const clip of clips) {
+    if (clip === 'wipe') {
+      ctx.beginPath(); ctx.rect(p * width, 0, width * (1 - p), height); ctx.clip();
+    } else if (clip === 'radial') {
+      ctx.beginPath(); ctx.arc(width / 2, height / 2, (1 - p) * Math.hypot(width, height) * .72, 0, Math.PI * 2); ctx.clip();
+    }
+  }
+  if (merged.alpha > .003) {
+    const drawLayer = (extraScale: number, alphaScale: number) => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, merged.alpha * alphaScale));
+      if (merged.blur > .4) ctx.filter = `blur(${merged.blur}px)`;
+      ctx.translate(width / 2 + merged.tx, height / 2);
+      ctx.scale(merged.scale * merged.scaleX * extraScale, merged.scale * extraScale);
+      ctx.rotate(merged.rotate);
+      ctx.translate(-width / 2, -height / 2);
+      ctx.drawImage(source, 0, 0, width, height);
+      ctx.restore();
+    };
+    drawLayer(1, 1);
+    for (let ghost = 1; ghost <= merged.ghosts; ghost += 1) drawLayer(1 + ghost * .07, .3 / ghost);
+  }
+  ctx.restore();
+  for (const style of styles) drawTransitionFx(ctx, style, p, look, width, height);
 }
 
 function drawMoodLook(ctx: CanvasRenderingContext2D, width: number, height: number, look: MoodEffectProfile, elapsed: number, sceneIndex: number) {
@@ -534,6 +743,34 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
   const audioRig = createAudioRig(stream, media);
   const hasAudio = stream.getAudioTracks().length > 0;
   const mime = recording.mime;
+  const resolvedLook = resolveMoodLook(settings);
+  const randomTransitions = resolvedLook.profile.transition === 'random';
+  let musicTempo: { beat: number; offset: number } | null = null;
+  if (randomTransitions && audioRig) {
+    const soundtrack = media
+      .filter((item) => item.kind === 'audio' && item.readable)
+      .sort((a, b) => a.file.lastModified - b.file.lastModified || a.file.name.localeCompare(b.file.name))[0];
+    if (soundtrack) {
+      onStatus({ stage: 'Listening for the beat to place transitions', elapsed: 0 });
+      musicTempo = await estimateMusicTempo(audioRig.context, soundtrack.url);
+    }
+  }
+  const tempo = musicTempo ?? { beat: 60 / moodTempoBpm[settings.mood], offset: 0 };
+  if (settings.overlayText && typeof document !== 'undefined' && document.fonts?.load) {
+    try {
+      await Promise.all([
+        document.fonts.load(`600 ${Math.round(height * .046)}px "Playfair Display"`),
+        document.fonts.load(`italic 600 ${Math.round(height * .046)}px "Playfair Display"`),
+      ]);
+    } catch {
+      /* Fall back to a styled serif when the web font cannot load. */
+    }
+  }
+  const openingFadeSec = Math.min(.95, Math.max(.35, scenes[0].duration * .16));
+  const endingFadeSec = Math.min(1.1, Math.max(.45, scenes[scenes.length - 1].duration * .18));
+  const transitionScratch = document.createElement('canvas');
+  transitionScratch.width = width;
+  transitionScratch.height = height;
   const chunks: BlobPart[] = [];
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: settings.quality === '1080p' ? 8_000_000 : 4_000_000 });
   const startedAt = performance.now();
@@ -547,6 +784,7 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
   try {
     onStatus({ stage: 'Preparing scenes and soundtrack', elapsed: 0 });
     await audioRig?.startMusic();
+    const musicStartSec = (performance.now() - startedAt) / 1000;
     for (let index = 0; index < scenes.length; index += 1) {
       const scene = scenes[index];
       if (cancelled()) throw new Error('Render cancelled.');
@@ -565,32 +803,55 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         image = video;
       }
       const { profile: baseLook, filter } = resolveMoodLook(settings);
-      const transitionChoices: TransitionStyle[] = ['crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom', 'slide', 'spin', 'glitch', 'radial-wipe', 'dip-black'];
-      const transitionSeed = seededNoise(index + 17) * transitionChoices.length;
       const randomTransition = baseLook.transition === 'random';
-      const look: MoodEffectProfile = randomTransition
-        ? { ...baseLook, transition: transitionChoices[Math.floor(transitionSeed) % transitionChoices.length], transitionSeconds: Math.min(baseLook.transitionSeconds, Math.max(.35, scene.duration * .24)) }
-        : baseLook;
-      const sceneStart = performance.now();
       const durationMs = scene.duration * 1000;
-      const fade = look.transition === 'none' ? 0 : Math.min(look.transitionSeconds, scene.duration * .4) * 1000;
+      const sceneStart = performance.now();
+      let look = baseLook;
+      let secondary: TransitionStyle | null = null;
+      let transitionDelayMs = 0;
+      let fade = 0;
+      if (randomTransition) {
+        const primaryStyle = transitionChoices[Math.floor(seededNoise(index + 17) * transitionChoices.length) % transitionChoices.length];
+        const beat = Math.max(.25, tempo.beat);
+        const baseFade = Math.min(baseLook.transitionSeconds, scene.duration * .4);
+        const subdivisions = [beat / 4, beat / 2, beat, beat * 1.5];
+        const fadeSec = Math.min(scene.duration * .4, Math.max(.2, subdivisions.reduce((best, candidate) => Math.abs(candidate - baseFade) < Math.abs(best - baseFade) ? candidate : best, subdivisions[0])));
+        fade = fadeSec * 1000;
+        const beatOrigin = musicTempo ? musicStartSec + musicTempo.offset : 0;
+        const desiredCenter = scene.start + fadeSec / 2;
+        const snappedCenter = beatOrigin + Math.round((desiredCenter - beatOrigin) / beat) * beat;
+        const delay = snappedCenter - fadeSec / 2 - scene.start;
+        transitionDelayMs = Math.max(0, Math.min(delay, Math.min(fadeSec, scene.duration * .35))) * 1000;
+        look = { ...baseLook, transition: primaryStyle, transitionSeconds: fadeSec };
+        if (seededNoise(index + 29) > .48) {
+          const secondaryIndex = Math.floor(seededNoise(index + 53) * combinedChoices.length) % combinedChoices.length;
+          const candidate = combinedChoices[secondaryIndex];
+          secondary = candidate === primaryStyle ? combinedChoices[(secondaryIndex + 1) % combinedChoices.length] : candidate;
+        }
+      } else {
+        fade = baseLook.transition === 'none' ? 0 : Math.min(baseLook.transitionSeconds, scene.duration * .4) * 1000;
+      }
+      const transitionEndMs = transitionDelayMs + fade;
       let snapshotCaptured = false;
       while (performance.now() - sceneStart < durationMs) {
         if (cancelled()) throw new Error('Render cancelled.');
         const elapsed = performance.now() - sceneStart;
         if (video && video.paused) await video.play().catch(() => undefined);
         if (video && video.duration && video.currentTime > video.duration - .08) video.currentTime = 0;
-        audioRig?.updateMix(item.kind === 'video', elapsed / 1000, total);
+        audioRig?.updateMix(item.kind === 'video', scene.start + elapsed / 1000, total, openingFadeSec, endingFadeSec);
         const iw = item.width || (video?.videoWidth ?? width), ih = item.height || (video?.videoHeight ?? height);
         ctx.filter = filter;
         const progress = elapsed / durationMs;
         const moodProgress = progress * Math.PI * 2;
         const breathing = look.motion === 'float' ? Math.sin(moodProgress) * .009 : 0;
-        const zoom = 1 + look.zoom * progress + breathing;
-        const driftProgress = look.motion === 'pan' || look.motion === 'sweep' ? progress - .5 : Math.sin(moodProgress / 2);
-        const panDirection = Math.floor(seededNoise(index + 41) * 8);
-        const driftX = (panDirection % 2 ? driftProgress : Math.sin(moodProgress / 2)) * width * look.driftX;
-        const driftY = (panDirection % 3 ? Math.sin(moodProgress / 2) : driftProgress) * height * look.driftY;
+        let zoom = 1 + look.zoom * progress + breathing;
+        const directional = look.motion === 'pan' || look.motion === 'sweep';
+        const driftProgress = directional ? progress - .5 : Math.sin(moodProgress / 2);
+        const speed = .65 + seededNoise(index + 67) * .65;
+        const panDirection = PAN_DIRECTIONS[Math.floor(seededNoise(index + 41) * PAN_DIRECTIONS.length) % PAN_DIRECTIONS.length];
+        const driftX = directional ? panDirection[0] * driftProgress * width * look.driftX * speed * 2 : driftProgress * width * look.driftX;
+        const driftY = directional ? panDirection[1] * driftProgress * height * look.driftY * speed * 2 : driftProgress * height * look.driftY;
+        zoom = Math.max(zoom, 1 + 2 * Math.max(Math.abs(driftX) / width, Math.abs(driftY) / height));
         ctx.save();
         ctx.translate(width / 2 + driftX, height / 2 + driftY);
         ctx.scale(zoom, zoom);
@@ -598,42 +859,54 @@ export async function recordFilm(scenes: Scene[], media: MediaItem[], settings: 
         drawCover(ctx, image, iw, ih, width, height, settings.fit);
         ctx.restore();
         ctx.filter = 'none';
-        if (durationMs - elapsed < fade + 140 && snapshotContext) {
+        if (durationMs - elapsed < transitionEndMs + 140 && snapshotContext) {
           snapshotContext.drawImage(canvas, 0, 0);
           snapshotCaptured = true;
         }
-        if (index > 0 && outgoingContext && fade > 0 && elapsed < fade) {
-          const compositedLook = randomTransition && elapsed < fade * .55 && seededNoise(index + 80) > .68 && look.transition !== 'none'
-            ? { ...look, transition: transitionChoices[(transitionChoices.indexOf(look.transition) + 1) % transitionChoices.length] }
-            : look;
-          drawTransition(ctx, outgoingCanvas, compositedLook, elapsed / fade, width, height);
+        if (index > 0 && outgoingContext && fade > 0 && elapsed >= transitionDelayMs && elapsed < transitionDelayMs + fade) {
+          drawTransition(ctx, outgoingCanvas, look, (elapsed - transitionDelayMs) / fade, width, height, transitionScratch, secondary);
         }
         drawMoodLook(ctx, width, height, look, elapsed / 1000, index);
-        if (settings.overlayText && scene.start + elapsed / 1000 >= settings.overlayStart && scene.start + elapsed / 1000 <= settings.overlayStart + settings.overlayDuration) {
-          const localTime = scene.start + elapsed / 1000 - settings.overlayStart;
-          const fadeInText = Math.min(1, localTime / .55);
-          const fadeOutText = Math.min(1, (settings.overlayDuration - localTime) / .55);
-          const alpha = Math.max(0, Math.min(fadeInText, fadeOutText)) * settings.overlayOpacity / 100;
-          const panelHeight = height * .105;
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = `rgba(10,12,18,${.72 * settings.overlayOpacity / 100})`;
-          ctx.beginPath(); ctx.roundRect(width * .1, height * .81, width * .8, panelHeight, height * .018); ctx.fill();
-          ctx.fillStyle = '#fffaf1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.font = `600 ${Math.round(height * .043)}px Georgia, serif`;
-          ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = height * .008;
-          ctx.fillText(settings.overlayText, width / 2, height * .862, width * .74);
-          ctx.restore();
+        if (settings.overlayText) {
+          const globalTime = scene.start + elapsed / 1000;
+          if (globalTime >= settings.overlayStart && globalTime <= settings.overlayStart + settings.overlayDuration) {
+            const localTime = globalTime - settings.overlayStart;
+            const fadeEdge = Math.min(.55, settings.overlayDuration / 3);
+            const fadeInText = Math.min(1, localTime / fadeEdge);
+            const fadeOutText = Math.min(1, (settings.overlayDuration - localTime) / fadeEdge);
+            const alpha = Math.max(0, Math.min(fadeInText, fadeOutText)) * settings.overlayOpacity / 100;
+            const panelHeight = height * .118;
+            const panelX = width * .07;
+            const panelW = width * .86;
+            const panelY = height * .79;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            const panelGradient = ctx.createLinearGradient(panelX, 0, panelX + panelW, 0);
+            panelGradient.addColorStop(0, 'rgba(8,10,16,0)');
+            panelGradient.addColorStop(.16, `rgba(8,10,16,${.72 * settings.overlayOpacity / 100})`);
+            panelGradient.addColorStop(.84, `rgba(8,10,16,${.72 * settings.overlayOpacity / 100})`);
+            panelGradient.addColorStop(1, 'rgba(8,10,16,0)');
+            ctx.fillStyle = panelGradient;
+            ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelHeight, height * .02); ctx.fill();
+            ctx.strokeStyle = `rgba(255,228,193,${.5 * settings.overlayOpacity / 100})`;
+            ctx.lineWidth = Math.max(1, width / 1920);
+            ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelHeight, height * .02); ctx.stroke();
+            ctx.fillStyle = '#fffaf1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = `italic 600 ${Math.round(height * .046)}px "Playfair Display", Georgia, serif`;
+            ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = height * .009;
+            ctx.fillText(settings.overlayText, width / 2, panelY + panelHeight / 2, width * .72);
+            ctx.restore();
+          }
         }
-        const openingFade = index === 0 ? Math.min(1.1, durationMs * .18) : 0;
-        const endingFade = index === scenes.length - 1 ? Math.min(1.1, durationMs * .18) : 0;
+        const openingFade = index === 0 ? openingFadeSec * 1000 : 0;
+        const endingFade = index === scenes.length - 1 ? endingFadeSec * 1000 : 0;
         if (openingFade > elapsed) {
           ctx.fillStyle = `rgba(0,0,0,${1 - elapsed / openingFade})`;
           ctx.fillRect(0, 0, width, height);
         }
         if (endingFade > 0 && durationMs - elapsed < endingFade) {
-          const progress = Math.max(0, 1 - (durationMs - elapsed) / endingFade);
-          ctx.fillStyle = `rgba(0,0,0,${progress})`;
+          const fadeProgress = Math.max(0, 1 - (durationMs - elapsed) / endingFade);
+          ctx.fillStyle = `rgba(0,0,0,${fadeProgress})`;
           ctx.fillRect(0, 0, width, height);
         }
         onStatus({ stage: `Applying effects and encoding scene ${index + 1} of ${scenes.length}`, elapsed: (performance.now() - startedAt) / 1000 });

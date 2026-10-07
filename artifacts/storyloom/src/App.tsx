@@ -6,7 +6,7 @@ import { defaultSettings, useTemplates, type EffectId, type Settings, type Templ
 
 const timeChoices = [{ value: 30, label: '30 sec' }, { value: 60, label: '1 min' }, { value: 120, label: '2 min' }, { value: 180, label: '3 min' }, { value: 300, label: '5 min' }, { value: 0, label: 'Custom' }];
 const iconFor = (kind: MediaItem['kind']) => kind === 'image' ? FileImage : kind === 'video' ? FileVideo2 : FileAudio2;
-const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise', 'Professional Cut': 'Dynamic pans · tempo-aware transitions' };
+const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise', 'Professional Cut': 'Dynamic pans · beat-synced cuts' };
 const fmtTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 function App() {
@@ -46,6 +46,7 @@ function App() {
   const filmDuration = settings.duration === 0 ? settings.customDuration : settings.duration;
   const plannedDuration = plan.length ? plan.reduce((sum, scene) => sum + scene.duration, 0) : filmDuration;
   const selectedScene = plan[Math.min(previewIndex, Math.max(plan.length - 1, 0))];
+  const overlayVisible = !!selectedScene && !!settings.overlayText && selectedScene.start < settings.overlayStart + settings.overlayDuration && selectedScene.start + selectedScene.duration > settings.overlayStart;
   const canRender = !!plan.length && !!recorderCapability && !rendering;
   const inputAccept = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/aac,audio/webm,.jpg,.jpeg,.png,.webp,.mp4,.webm,.mov,.mp3,.wav,.ogg,.m4a,.aac';
 
@@ -368,6 +369,7 @@ function App() {
                 {selectedScene?.item.kind === 'image' && <img key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} alt={`Preview scene: ${selectedScene.item.file.name}`} />}
                 {selectedScene?.item.kind === 'video' && <video key={`${selectedScene.item.id}-${previewIndex}`} src={selectedScene.item.url} muted playsInline autoPlay loop />}
                 {selectedScene && <><div className="preview-vignette" /><div className="preview-bloom" /><div className="preview-light-leak" /><div className="preview-grain" /><div className="preview-matte" /><div key={`${selectedScene.item.id}-${previewIndex}-${activeLook.transition}`} className="preview-transition" /></>}
+                {selectedScene && overlayVisible && <div key={`overlay-${previewIndex}-${settings.overlayText}`} className="preview-overlay-caption" style={{ '--overlay-opacity': settings.overlayOpacity / 100 } as CSSProperties}><span>{settings.overlayText}</span></div>}
                 {!selectedScene && <div className="preview-empty"><Aperture size={28} /><span>Your film begins here</span><small>Add a readable photo or clip to preview the story.</small></div>}
                 <div className="monitor-caption"><span>{settings.mood.toUpperCase()} CUT</span><span>{String(previewIndex + 1).padStart(2, '0')} / {String(plan.length).padStart(2, '0')}</span></div>
               </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export type Mood = 'Cinematic' | 'Romantic' | 'Happy & Energetic' | 'Travel Adventure' | 'Nostalgic' | 'Family & Memories' | 'Epic' | 'Minimal & Elegant' | 'Dreamy' | 'Professional Cut';
 export type EffectId = 'colorGrade' | 'cameraMove' | 'vignette' | 'filmGrain' | 'glow' | 'lightLeak' | 'dust' | 'letterbox';
-export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom' | 'slide' | 'spin' | 'glitch' | 'radial-wipe' | 'dip-black' | 'random';
+export type TransitionStyle = 'crossfade' | 'wipe' | 'light-leak' | 'film-burn' | 'flash-cut' | 'zoom-impact' | 'soft-fade' | 'bloom' | 'slide' | 'spin' | 'glitch' | 'radial-wipe' | 'dip-black' | 'fade-into' | 'luma-wipe' | 'zoom-blur' | 'whip-pan' | 'flip' | 'light-sweep' | 'blur-dissolve' | 'random';
 export type TransitionPreference = 'mood' | 'none' | TransitionStyle;
 export type Settings = {
   duration: number;
@@ -50,7 +50,7 @@ export const defaultSettings: Settings = {
   useMoodTransitionDuration: true,
 };
 const moods: Mood[] = ['Cinematic', 'Romantic', 'Happy & Energetic', 'Travel Adventure', 'Nostalgic', 'Family & Memories', 'Epic', 'Minimal & Elegant', 'Dreamy', 'Professional Cut'];
-const transitionStyles: TransitionPreference[] = ['mood', 'none', 'crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom', 'slide', 'spin', 'glitch', 'radial-wipe', 'dip-black', 'random'];
+const transitionStyles: TransitionPreference[] = ['mood', 'none', 'crossfade', 'wipe', 'light-leak', 'film-burn', 'flash-cut', 'zoom-impact', 'soft-fade', 'bloom', 'slide', 'spin', 'glitch', 'radial-wipe', 'dip-black', 'fade-into', 'luma-wipe', 'zoom-blur', 'whip-pan', 'flip', 'light-sweep', 'blur-dissolve', 'random'];
 const effectIds: EffectId[] = ['colorGrade', 'cameraMove', 'vignette', 'filmGrain', 'glow', 'lightLeak', 'dust', 'letterbox'];
 const initial: Template[] = [{ id: 'tpl-cinematic', name: 'After the Rain', settings: defaultSettings, isDefault: true }];
 

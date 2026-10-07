@@ -611,6 +611,20 @@ button { cursor: pointer; }
 @keyframes preview-flash-cut { from { opacity:.72; } to { opacity:0; } }
 @keyframes preview-impact { from { opacity:.62;transform:scale(.94); } to { opacity:0;transform:scale(1.08); } }
 @keyframes preview-bloom-in { from { opacity:.85;filter:blur(9px); } to { opacity:0;filter:blur(0); } }
+.monitor-image[data-transition="luma-wipe"] .preview-transition { background:linear-gradient(90deg,transparent 40%,rgba(255,255,255,.3) 68%,transparent 92%);mix-blend-mode:screen;animation-name:preview-seam-sweep; }
+.monitor-image[data-transition="light-sweep"] .preview-transition { background:linear-gradient(100deg,transparent 26%,rgba(255,248,228,.55) 48%,rgba(255,244,218,.16) 58%,transparent 72%);mix-blend-mode:screen;animation-name:preview-seam-sweep; }
+.monitor-image[data-transition="whip-pan"] .preview-transition,.monitor-image[data-transition="slide"] .preview-transition { background:linear-gradient(90deg,rgba(255,255,255,.28),transparent 45%);mix-blend-mode:screen;animation-name:preview-whip; }
+.monitor-image[data-transition="zoom-blur"] .preview-transition { background:radial-gradient(circle at 50% 48%,rgba(255,250,240,.5),transparent 62%);mix-blend-mode:screen;animation-name:preview-impact; }
+.monitor-image[data-transition="blur-dissolve"] .preview-transition { background:rgba(236,240,255,.34);mix-blend-mode:screen;animation-name:preview-bloom-in; }
+.monitor-image[data-transition="fade-into"] .preview-transition { background:rgba(10,12,18,.4);animation-name:preview-transition-fade; }
+.monitor-image[data-transition="flip"] .preview-transition { background:linear-gradient(90deg,transparent 45%,rgba(255,246,226,.4) 50%,transparent 55%);mix-blend-mode:screen;animation-name:preview-flash-cut; }
+.monitor-image[data-transition="glitch"] .preview-transition { background:linear-gradient(112deg,transparent 35%,rgba(255,40,100,.18) 48%,transparent 62%);mix-blend-mode:screen;animation-name:preview-flash-cut; }
+.monitor-image[data-transition="radial-wipe"] .preview-transition { background:radial-gradient(circle at 50% 50%,transparent 52%,rgba(8,10,16,.5) 72%);animation-name:preview-bloom-in; }
+@keyframes preview-seam-sweep { from { transform:translateX(-35%);opacity:.9; } to { transform:translateX(35%);opacity:0; } }
+@keyframes preview-whip { from { transform:translateX(-18%);opacity:.85; } to { transform:translateX(30%);opacity:0; } }
+.preview-overlay-caption { position:absolute;z-index:7;left:7%;right:7%;bottom:9%;display:flex;justify-content:center;pointer-events:none;animation:overlay-caption-in .55s ease-out both; }
+.preview-overlay-caption span { max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1.2% 4%;border-radius:3px;background:linear-gradient(90deg,rgba(8,10,16,0),rgba(8,10,16,.72) 16%,rgba(8,10,16,.72) 84%,rgba(8,10,16,0));border:1px solid rgba(255,228,193,.5);color:#fffaf1;font:italic 600 clamp(12px,1.5vw,22px) "Playfair Display",Georgia,serif;text-shadow:0 1px 4px rgba(0,0,0,.5);opacity:var(--overlay-opacity,1); }
+@keyframes overlay-caption-in { from { opacity:0;transform:translateY(6px);} to { opacity:1;transform:none; } }
 .preview-empty { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:hsl(var(--accent)); }
 .preview-empty span { font:italic 18px var(--app-font-serif);color:hsl(var(--foreground)); }
 .preview-empty small { font-size:9px;color:hsl(var(--muted-foreground)); }
