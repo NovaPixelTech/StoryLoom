@@ -9,6 +9,32 @@ const iconFor = (kind: MediaItem['kind']) => kind === 'image' ? FileImage : kind
 const moodShort: Record<string, string> = { 'Happy & Energetic': 'Bright, quick cuts', 'Travel Adventure': 'Open-road color', 'Family & Memories': 'Soft, familiar warmth', 'Minimal & Elegant': 'Quiet and precise', 'Professional Cut': 'Dynamic pans · beat-synced cuts' };
 const fmtTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
+function DraftNumberField({ value, min, max, step, ariaLabel, onCommit }: { value: number; min: number; max: number; step?: number; ariaLabel: string; onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    if (draft.trim() === '') { setDraft(null); return; }
+    const parsed = Number(draft);
+    const next = Number.isFinite(parsed) ? parsed : value;
+    setDraft(null);
+    onCommit(Math.min(max, Math.max(min, Math.round(next * 100) / 100)));
+  };
+  return (
+    <input
+      className="field"
+      type="number"
+      aria-label={ariaLabel}
+      min={min}
+      max={max}
+      step={step ?? .1}
+      value={draft ?? String(value)}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => { if (event.key === 'Enter') commit(); }}
+    />
+  );
+}
+
 function App() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -335,8 +361,8 @@ function App() {
             <div className="setting-label"><Sparkles size={15} /><span>CAPTION OVERLAY</span></div>
             <label className="transition-select-label"><span>Text shown in an elegant lower-third frame</span><input className="field" maxLength={120} placeholder="Add a title or memorable line…" value={settings.overlayText} onChange={(event) => setSetting('overlayText', event.target.value)} /></label>
             <div className="overlay-fields">
-              <label className="transition-select-label"><span>Start (seconds)</span><input className="field" type="number" min={0} max={Math.max(0, plannedDuration - .5)} value={settings.overlayStart} onChange={(event) => setSetting('overlayStart', Math.max(0, Number(event.target.value)))} /></label>
-              <label className="transition-select-label"><span>Duration (seconds)</span><input className="field" type="number" min={.5} max={Math.max(.5, plannedDuration)} value={settings.overlayDuration} onChange={(event) => setSetting('overlayDuration', Math.max(.5, Number(event.target.value)))} /></label>
+              <label className="transition-select-label"><span>Start (seconds)</span><DraftNumberField value={settings.overlayStart} min={0} max={Math.max(0, plannedDuration - .5)} ariaLabel="Overlay start time in seconds" onCommit={(startValue) => setSetting('overlayStart', startValue)} /></label>
+              <label className="transition-select-label"><span>Duration (seconds)</span><DraftNumberField value={settings.overlayDuration} min={.5} max={Math.max(.5, plannedDuration)} ariaLabel="Overlay duration in seconds" onCommit={(overlayDuration) => setSetting('overlayDuration', overlayDuration)} /></label>
               <label className="custom-range"><span className="custom-range-heading"><span><strong>Overlay opacity</strong></span><b>{settings.overlayOpacity}%</b></span><input aria-label="Overlay opacity" type="range" min={0} max={100} value={settings.overlayOpacity} onChange={(event) => setSetting('overlayOpacity', Number(event.target.value))} /></label>
             </div>
             <p className="setting-help">Caption and frame fade in and out automatically. Text is clipped to the lower-third safe area.</p>
